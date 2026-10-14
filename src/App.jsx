@@ -8,7 +8,7 @@ import Binder from './components/Binder'
 import CardModal from './components/CardModal'
 
 const Icon = ({ children }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     {children}
   </svg>
 )
@@ -62,12 +62,8 @@ export default function App() {
   if (session === undefined) {
     return (
       <main className="grid h-full place-items-center">
-        <motion.h1
-          className="gold-text font-display text-4xl font-black tracking-[.14em]"
-          animate={{ opacity: [0.4, 1, 0.4] }}
-          transition={{ duration: 1.8, repeat: Infinity }}
-        >
-          CINECLUB
+        <motion.h1 className="wordmark text-2xl" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 2.4, repeat: Infinity }}>
+          Cineclub
         </motion.h1>
       </main>
     )
@@ -75,42 +71,61 @@ export default function App() {
   if (!session) return <AuthScreen />
 
   return (
-    <div className="mx-auto flex h-full max-w-2xl flex-col">
-      {syncError && <p role="alert" className="safe-top bg-rose px-4 py-2 text-center text-sm font-semibold text-black">{syncError}</p>}
+    <div className="flex h-full w-full flex-col">
+      {syncError && <p role="alert" className="safe-top bg-rose px-4 py-2 text-center text-sm font-medium text-black">{syncError}</p>}
 
-      <main className="safe-top min-h-0 flex-1 pt-3">
+      {/* Barre du haut (ordinateur) */}
+      <header className="safe-top hidden items-center justify-between border-b border-[var(--hair)] px-10 pb-5 pt-5 md:flex">
+        <span className="wordmark text-xl">Cineclub</span>
+        <nav className="flex gap-10">
+          {TABS.map((t) => {
+            const active = tab === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                aria-current={active ? 'page' : undefined}
+                className={`relative pb-1.5 text-[.72rem] font-medium uppercase tracking-[.22em] transition-colors ${active ? 'text-gold-300' : 'text-mist hover:text-ivory'}`}
+              >
+                {t.label}
+                {active && <motion.span layoutId="nav-line" className="absolute inset-x-0 -bottom-px h-px bg-gold-500" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+              </button>
+            )
+          })}
+        </nav>
+        <span className="hidden w-32 truncate text-right text-xs text-mist lg:block">{session.user.email}</span>
+        <span className="w-32 lg:hidden" />
+      </header>
+
+      <main className="safe-top min-h-0 flex-1 pt-3 md:pt-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
             className="h-full"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.25 }}
           >
             {tab === 'booster' && <BoosterPack onOpened={refresh} onOpenCard={setModal} />}
             {tab === 'binder' && <Binder collection={collection} known={known} onOpenCard={setModal} />}
             {tab === 'account' && (
-              <div className="mx-auto max-w-sm space-y-5 px-5 pt-10 text-center">
-                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-gradient-to-b from-gold-300 to-gold-700 font-display text-3xl font-bold text-black shadow-gold">
+              <div className="mx-auto max-w-sm space-y-6 px-5 pt-14 text-center">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-[var(--hair-strong)] font-display text-2xl text-gold-300">
                   {session.user.email?.[0]?.toUpperCase() || '?'}
                 </div>
-                <h1 className="font-display text-2xl font-bold text-ivory">Mon compte</h1>
-                <p className="break-all text-mist">{session.user.email}</p>
-                <div className="gold-rule" />
-                <button
-                  onClick={() => supabase.auth.signOut()}
-                  className="w-full rounded-xl bg-white/5 py-3 font-semibold ring-1 ring-gold-500/30 transition hover:bg-gold-500/10"
-                >
-                  Se déconnecter
-                </button>
+                <h1 className="title text-3xl text-ivory">Mon compte</h1>
+                <p className="break-all text-sm text-mist">{session.user.email}</p>
+                <div className="hairline" />
+                <button onClick={() => supabase.auth.signOut()} className="btn w-full">Se déconnecter</button>
               </div>
             )}
           </motion.div>
         </AnimatePresence>
       </main>
 
-      <nav className="safe-bottom relative flex border-t border-gold-500/20 bg-black/80 backdrop-blur-xl">
+      {/* Barre du bas (mobile) */}
+      <nav className="safe-bottom flex border-t border-[var(--hair)] bg-black/85 backdrop-blur-xl md:hidden">
         {TABS.map((t) => {
           const active = tab === t.id
           return (
@@ -118,16 +133,9 @@ export default function App() {
               key={t.id}
               onClick={() => setTab(t.id)}
               aria-current={active ? 'page' : undefined}
-              className={`relative flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-semibold transition-colors ${active ? 'text-gold-400' : 'text-mist hover:text-ivory'}`}
+              className={`relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[.62rem] font-medium uppercase tracking-[.18em] transition-colors ${active ? 'text-gold-300' : 'text-mist'}`}
             >
-              {active && (
-                <motion.span
-                  layoutId="nav-glow"
-                  className="absolute inset-x-6 top-0 h-[2px] rounded-full bg-gold-400"
-                  style={{ boxShadow: '0 0 14px 2px rgba(251,191,36,.7)' }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 36 }}
-                />
-              )}
+              {active && <motion.span layoutId="nav-top" className="absolute inset-x-10 top-0 h-px bg-gold-500" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
               {t.icon}
               {t.label}
             </button>
