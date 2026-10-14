@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import { RARITIES, CARD_TYPES } from '../constants'
 import Card from './Card'
 
@@ -8,8 +9,34 @@ const TYPE_FILTERS = [
   ...Object.values(CARD_TYPES).map((t) => ({ id: t.id, label: `${t.icon} ${t.plural}` })),
 ]
 
-const chip = (active) =>
-  `shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold ${active ? 'bg-honey text-night' : 'bg-dusk text-mist ring-1 ring-plum'}`
+// Rangée de filtres : la pastille dorée glisse d'un choix à l'autre
+function Chips({ group, options, value, onChange, extra }) {
+  return (
+    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 py-1">
+      {options.map((o) => {
+        const active = value === o.id
+        return (
+          <button
+            key={o.id}
+            onClick={() => onChange(o.id)}
+            aria-pressed={active}
+            className="relative shrink-0 rounded-full bg-white/[0.03] px-4 py-1.5 text-[13px] font-semibold ring-1 ring-white/10"
+          >
+            {active && (
+              <motion.span
+                layoutId={`chip-${group}`}
+                className="absolute inset-0 rounded-full bg-gradient-to-b from-gold-300 to-gold-600 shadow-gold-sm"
+                transition={{ type: 'spring', stiffness: 500, damping: 36 }}
+              />
+            )}
+            <span className={`relative ${active ? 'text-black' : 'text-mist'}`}>{o.label}</span>
+          </button>
+        )
+      })}
+      {extra}
+    </div>
+  )
+}
 
 export default function Binder({ collection, known, onOpenCard }) {
   const [rarity, setRarity] = useState('all')
@@ -26,37 +53,75 @@ export default function Binder({ collection, known, onOpenCard }) {
     (rarity === 'all' || s.rarity === rarity) &&
     (type === 'all' || s.type === type) &&
     (!onlyOwned || !s.locked))
+
   const owned = Object.keys(collection).length
+  const total = Math.max(slots.length, owned)
+  const pct = total ? Math.round((owned / total) * 100) : 0
 
   return (
     <div className="flex h-full flex-col">
       <header className="px-4 pb-2">
-        <h1 className="font-display text-3xl font-extrabold">Mon album</h1>
-        <p className="text-sm text-mist">{owned} carte{owned > 1 ? 's' : ''} sur {Math.max(slots.length, owned)} découvertes</p>
-        <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
-          {TYPE_FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setType(f.id)} aria-pressed={type === f.id} className={chip(type === f.id)}>{f.label}</button>
-          ))}
+        <div className="flex items-end justify-between gap-4">
+          <h1 className="font-display text-3xl font-bold text-ivory">Mon album</h1>
+          <p className="pb-1 text-sm text-mist">
+            <span className="font-display text-lg font-bold text-gold-400">{owned}</span> / {total} cartes
+          </p>
         </div>
-        <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1">
-          {RARITY_FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setRarity(f.id)} aria-pressed={rarity === f.id} className={chip(rarity === f.id)}>{f.label}</button>
-          ))}
-          <button onClick={() => setOnlyOwned((v) => !v)} aria-pressed={onlyOwned}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold ${onlyOwned ? 'bg-mint text-night' : 'bg-dusk text-mist ring-1 ring-plum'}`}>
-            Possédées
-          </button>
+
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Progression de la collection">
+          <motion.div
+            className="h-full rounded-full bg-gradient-to-r from-gold-700 via-gold-400 to-gold-300 shadow-gold-sm"
+            initial={{ width: 0 }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.9, ease: 'easeOut' }}
+          />
         </div>
+
+        <div className="mt-3">
+          <Chips group="type" options={TYPE_FILTERS} value={type} onChange={setType} />
+          <Chips
+            group="rarity"
+            options={RARITY_FILTERS}
+            value={rarity}
+            onChange={setRarity}
+            extra={
+              <button
+                onClick={() => setOnlyOwned((v) => !v)}
+                aria-pressed={onlyOwned}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-[13px] font-semibold ring-1 transition-colors ${onlyOwned ? 'bg-mint text-black ring-mint' : 'bg-white/[0.03] text-mist ring-white/10'}`}
+              >
+                Possédées
+              </button>
+            }
+          />
+        </div>
+        <div className="gold-rule mt-2 opacity-60" />
       </header>
-      <div className="flex-1 overflow-y-auto px-4 pb-6">
+
+      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3">
         {shown.length === 0 ? (
-          <p className="mt-16 text-center text-mist">{owned ? 'Aucune carte ne correspond à ce filtre.' : 'Ton album est vide. Ouvre un booster pour commencer.'}</p>
+          <div className="mx-auto mt-16 max-w-xs text-center">
+            <p className="font-display text-xl text-gold-300">{owned ? 'Rien à cet endroit' : 'Album vide'}</p>
+            <p className="mt-2 text-sm text-mist">
+              {owned ? 'Aucune carte ne correspond à ces filtres. Essaie d’en retirer un.' : 'Ouvre ton premier booster pour remplir l’album.'}
+            </p>
+          </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-            {shown.map((s) => (
-              <div key={s.key} className={s.locked ? 'opacity-50 grayscale' : ''}>
-                <Card card={s} locked={s.locked} count={collection[s.key]?.count} onClick={() => onOpenCard(collection[s.key])} />
-              </div>
+          <div key={`${type}-${rarity}-${onlyOwned}`} className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
+            {shown.map((s, i) => (
+              <motion.div
+                key={s.key}
+                initial={{ opacity: 0, y: 14, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.35, delay: Math.min(i, 14) * 0.03, ease: 'easeOut' }}
+              >
+                <Card
+                  card={s}
+                  locked={s.locked}
+                  count={collection[s.key]?.count}
+                  onClick={s.locked ? undefined : () => onOpenCard(collection[s.key])}
+                />
+              </motion.div>
             ))}
           </div>
         )}
