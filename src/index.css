@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@property --a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
+:root { --c: #b8b0c8; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0; color: #f3edff; font-family: Figtree, system-ui, sans-serif;
+  background: radial-gradient(120% 60% at 50% -10%, #3a2a63 0%, #1a1230 60%) fixed;
+  -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid #f2c76e; outline-offset: 2px; }
+
+/* Raretés */
+.rar-common { --c: #b8b0c8; }
+.rar-rare { --c: #6fb7ff; }
+.rar-epic { --c: #c08bff; }
+.rar-legendary { --c: #ffcf5a; }
+
+.card {
+  position: relative; display: block; width: 100%; aspect-ratio: 5 / 7; padding: 3px; border: 0;
+  border-radius: 14px; overflow: hidden; text-align: left; cursor: pointer;
+  background: linear-gradient(160deg, var(--c), #3a2a63 75%);
+  box-shadow: 0 8px 22px -10px color-mix(in srgb, var(--c) 70%, transparent);
+}
+.rar-rare { box-shadow: 0 0 16px -2px color-mix(in srgb, var(--c) 55%, transparent); }
+.rar-epic { box-shadow: 0 0 22px -2px color-mix(in srgb, var(--c) 70%, transparent); }
+.rar-legendary {
+  background: conic-gradient(from var(--a), #ffcf5a, #ff8fb1, #8fd6ff, #b6ff9a, #ffcf5a);
+  box-shadow: 0 0 28px -2px rgba(255, 207, 90, .65); animation: spin 6s linear infinite;
+}
+.rar-epic::after, .rar-legendary::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.45) 50%, transparent 70%);
+  background-size: 250% 100%; animation: shine 3.4s ease-in-out infinite;
+}
+.card-in { height: 100%; display: flex; flex-direction: column; border-radius: 11px; background: #241a3b; overflow: hidden; }
+.card-art { flex: 1; min-height: 0; position: relative; }
+.card-art img { width: 100%; height: 100%; object-fit: cover; }
+.card-initials {
+  width: 100%; height: 100%; display: grid; place-items: center; font-family: Fraunces, serif; font-weight: 800;
+  font-size: 2.2em; color: #1a1230; background: linear-gradient(150deg, var(--c), #f28fa8);
+}
+.card-foot { padding: 6px 7px 7px; }
+.card-name { margin: 0; font: 800 .8em/1.15 Fraunces, serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-meta { margin: 1px 0 0; font-size: .66em; font-weight: 700; color: var(--c); }
+.card-locked {
+  display: grid; place-items: center; cursor: default; background: #231a3a; box-shadow: none; animation: none;
+  border: 2px dashed #4a3a78; padding: 0;
+}
+.card-locked::after { display: none; }
+
+/* Retournement */
+.flip { perspective: 900px; aspect-ratio: 5 / 7; cursor: pointer; }
+.flip-in { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .7s cubic-bezier(.3, 1.25, .5, 1); }
+.flip.on .flip-in { transform: rotateY(180deg); }
+.face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.face.front { transform: rotateY(180deg); }
+.card-back {
+  height: 100%; border-radius: 14px; display: grid; place-items: center; font-size: 2.4rem; color: #f2c76e;
+  background: repeating-linear-gradient(45deg, #3a2a63 0 8px, #33245a 8px 16px); border: 3px solid #f2c76e55;
+}
+.badge-new { position: absolute; top: 6px; right: 6px; z-index: 2; background: #f2c76e; color: #1a1230; font-size: .62rem; font-weight: 800; padding: 2px 7px; border-radius: 99px; }
+
+.pack {
+  width: 190px; aspect-ratio: 5 / 7; border-radius: 20px; display: grid; place-items: center; text-align: center;
+  background: linear-gradient(160deg, #f28fa8, #f2c76e); color: #1a1230; font: 800 1.7rem Fraunces, serif;
+  box-shadow: 0 20px 40px -14px #f28fa899; animation: float 3.5s ease-in-out infinite;
+}
+.pack.shake { animation: shake .4s infinite; }
+.sheet-in { animation: sheet .28s ease-out; }
+
+@keyframes spin { to { --a: 360deg; } }
+@keyframes shine { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+@keyframes float { 50% { transform: translateY(-8px) rotate(1.5deg); } }
+@keyframes shake { 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+@keyframes sheet { from { transform: translateY(30px) scale(.96); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) { *, *::after { animation: none !important; transition-duration: .01ms !important; } }
+.safe-top { padding-top: max(env(safe-area-inset-top), 12px); }
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
