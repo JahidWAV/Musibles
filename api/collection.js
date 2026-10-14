@@ -1,24 +1,15 @@
 import { db, requireUser } from './_lib/db.js'
+import { toCard } from './_lib/cards.js'
 
-// Fonction utilitaire pour transformer l'artiste de Supabase au format carte du TCG
-function toCard(artist) {
-  return {
-    id: artist.id,
-    name: artist.name,
-    listeners: artist.listeners,
-    rarity: artist.rarity,
-    // Tu peux ajouter ici les propriétés additionnelles de tes cartes si besoin
-  }
-}
-
-// PostgREST plafonne à 1000 lignes par requête : on pagine pour récupérer les artistes
-async function allKnown() {
+// PostgREST plafonne à 1000 lignes par requête : on pagine.
+async function fetchAll(build) {
   const out = []
-  for (let from = 0; from < 10000; from += 1000) {
-    const { data, error } = await db.from('artists').select('id,name,listeners,rarity').order('listeners', { ascending: false }).range(from, from + 999)
+  const size = 1000
+  for (let from = 0; ; from += size) {
+    const { data, error } = await build().range(from, from + size - 1)
     if (error) throw error
     out.push(...data)
-    if (data.length < 1000) break
+    if (data.length < size) break
   }
   return out
 }
@@ -27,14 +18,41 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ message: 'Méthode non autorisée.' })
   const user = await requireUser(req, res)
   if (!user) return
+
   try {
-    const { data, error } = await db.from('collection').select('copies, artists(*)').eq('user_id', user.id)
-    if (error) throw error
-    const collection = Object.fromEntries(data.map((r) => [r.artists.id, { ...toCard(r.artists), count: r.copies }]))
-    res.setHeader('Cache-Control', 'no-store')
-    return res.json({ collection, known: await allKnown() })
+    const [inventory, catalog] = await Promise.all([
+      fetchAll(() =>
+        db.from('user_inventory')
+          .select('card_type, card_id, rarity, snapshot')
+          .eq('user_id', user.id)
+          .order('acquired_at', { ascending: true })
+          .order('id', { ascending: true })),
+      fetchAll(() =>
+        db.from('cards_catalog')
+          .select('card_type, card_id, rarity, popularity')
+          .order('card_type', { ascending: true })
+          .order('card_id', { ascending: true })),
+    ])
+
+    // Une entrée par carte : snapshot de la 1re copie, count = nombre d'exemplaires
+    const collection = {}
+    for (const row of inventory) {
+      const key = `${row.card_type}:${row.card_id}`
+      if (collection[key]) collection[key].count += 1
+      else collection[key] = toCard({ ...row, copies: 1, is_new: false })
+    }
+
+    const known = catalog.map((c) => ({
+      key: `${c.card_type}:${c.card_id}`,
+      type: c.card_type,
+      id: c.card_id,
+      rarity: c.rarity,
+      popularity: Number(c.popularity) || 0,
+    }))
+
+    return res.json({ collection, known })
   } catch (err) {
     console.error(err)
-    return res.status(500).json({ message: 'Impossible de charger ton album.' })
+    return res.status(500).json({ message: 'Impossible de charger la collection.' })
   }
 }
