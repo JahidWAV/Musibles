@@ -11,9 +11,9 @@ const RARITY_TEXT = {
 }
 
 const Stat = ({ label, value }) => (
-  <div className="rounded-2xl bg-white/[0.035] p-3 ring-1 ring-white/10">
-    <dt className="text-xs text-mist">{label}</dt>
-    <dd className="mt-0.5 font-display text-xl font-bold text-gold-300">{value}</dd>
+  <div className="border border-[var(--hair)] px-4 py-3">
+    <dt className="text-[.65rem] uppercase tracking-[.2em] text-mist">{label}</dt>
+    <dd className="title mt-1 text-2xl text-gold-300">{value}</dd>
   </div>
 )
 
@@ -48,7 +48,7 @@ function Sheet({ card, onClose }) {
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-md sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/85 backdrop-blur-sm md:items-center md:p-10"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -56,74 +56,67 @@ function Sheet({ card, onClose }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.25 }}
     >
       <motion.div
         data-rarity={rarityKey}
-        className="sheet relative max-h-[92%] w-full max-w-md overflow-y-auto rounded-t-3xl p-6 sm:rounded-3xl"
+        className="sheet relative max-h-[94%] w-full max-w-md overflow-y-auto p-6 md:max-h-full md:max-w-4xl md:p-12"
         onClick={(e) => e.stopPropagation()}
-        initial={{ y: 80, opacity: 0, scale: 0.96 }}
-        animate={{ y: 0, opacity: 1, scale: 1 }}
-        exit={{ y: 60, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 24, opacity: 0 }}
+        transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
       >
         <div className="sheet-spot" />
         <button
           onClick={onClose}
           aria-label="Fermer"
-          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/5 text-lg text-mist ring-1 ring-white/10 hover:text-white"
+          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center text-xl font-light text-mist transition-colors hover:text-ivory"
         >
           ✕
         </button>
 
-        <div className="relative mx-auto w-52">
-          <Card card={card} />
-        </div>
+        <div className="relative flex flex-col items-center gap-8 md:flex-row md:items-center md:gap-14">
+          <div className="w-52 shrink-0 md:w-72">
+            <Card card={card} />
+          </div>
 
-        <h2 className="relative mt-6 text-center font-display text-2xl font-bold leading-tight text-ivory">{name}</h2>
-        <p className="relative mt-1.5 text-center text-sm font-bold tracking-wide" style={{ color: 'var(--c)' }}>
-          {type.icon} {type.label} · {RARITIES[rarityKey].label}
-        </p>
-        <p className="relative mt-1 text-center text-sm text-mist">{RARITY_TEXT[rarityKey]}</p>
+          <div className="w-full text-center md:text-left">
+            <p className="text-[.7rem] font-medium uppercase tracking-[.24em]" style={{ color: 'var(--c)' }}>
+              {type.label} · {RARITIES[rarityKey].label}
+            </p>
+            <h2 className="title mt-2 text-4xl leading-[1.05] text-ivory md:text-5xl">{name}</h2>
+            <p className="mt-3 text-sm text-mist">{RARITY_TEXT[rarityKey]}</p>
+            <div className="hairline my-6 md:mr-auto md:w-full" />
 
-        <dl className="relative mt-5 grid grid-cols-2 gap-3 text-center">
-          {isMovie ? (
-            <>
-              <Stat label="Note" value={rating != null ? `${Number(rating).toFixed(1)}/10` : '—'} />
-              <Stat label="Votes" value={fmt(votes)} />
-              <Stat label="Sortie" value={year} />
-              <Stat label="Popularité" value={fmt(Math.round(card.popularity || 0))} />
-            </>
-          ) : (
-            <>
-              <Stat label="Métier" value={DEPARTMENTS[card.department || card.known_for_department] || 'Personnalité'} />
-              <Stat label="Popularité" value={fmt(Math.round(card.popularity || 0))} />
-            </>
-          )}
-        </dl>
+            <dl className="grid grid-cols-2 gap-3 text-left">
+              {isMovie ? (
+                <>
+                  <Stat label="Note" value={rating != null ? `${Number(rating).toFixed(1).replace('.', ',')} / 10` : '—'} />
+                  <Stat label="Votes" value={fmt(votes)} />
+                  <Stat label="Sortie" value={year} />
+                  <Stat label="Popularité" value={fmt(Math.round(card.popularity || 0))} />
+                </>
+              ) : (
+                <>
+                  <Stat label="Métier" value={DEPARTMENTS[card.department || card.known_for_department] || 'Personnalité'} />
+                  <Stat label="Popularité" value={fmt(Math.round(card.popularity || 0))} />
+                </>
+              )}
+            </dl>
 
-        {isMovie && card.overview && (
-          <p className="relative mt-5 text-sm leading-relaxed text-mist">
-            {card.overview.slice(0, 260)}
-            {card.overview.length > 260 ? '…' : ''}
-          </p>
-        )}
+            {isMovie && card.overview && (
+              <p className="mt-6 max-w-prose text-left text-sm leading-relaxed text-mist">
+                {card.overview.slice(0, 260)}
+                {card.overview.length > 260 ? '…' : ''}
+              </p>
+            )}
 
-        <div className="relative mt-6 flex gap-3">
-          <a
-            href={tmdbUrl(card)}
-            target="_blank"
-            rel="noreferrer"
-            className="flex-1 rounded-2xl bg-white/5 py-3 text-center font-semibold ring-1 ring-gold-500/30 transition hover:bg-gold-500/10"
-          >
-            Voir sur TMDB
-          </a>
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-2xl bg-gradient-to-b from-gold-300 to-gold-600 py-3 font-bold text-black shadow-gold-sm transition active:scale-[.98]"
-          >
-            Fermer
-          </button>
+            <div className="mt-8 flex gap-3">
+              <a href={tmdbUrl(card)} target="_blank" rel="noreferrer" className="btn flex-1">Voir sur TMDB</a>
+              <button onClick={onClose} className="btn btn-fill flex-1">Fermer</button>
+            </div>
+          </div>
         </div>
       </motion.div>
     </motion.div>
