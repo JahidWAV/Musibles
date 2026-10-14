@@ -1,10 +1,20 @@
 import { db, requireUser } from './_lib/db.js'
-import { toCard } from './_lib/lastfm.js'
 
-// PostgREST plafonne à 1000 lignes par requête : on pagine.
+// Fonction utilitaire pour transformer l'artiste de Supabase au format carte du TCG
+function toCard(artist) {
+  return {
+    id: artist.id,
+    name: artist.name,
+    listeners: artist.listeners,
+    rarity: artist.rarity,
+    // Tu peux ajouter ici les propriétés additionnelles de tes cartes si besoin
+  }
+}
+
+// PostgREST plafonne à 1000 lignes par requête : on pagine pour récupérer les artistes
 async function allKnown() {
   const out = []
-  for (let from = 0; from < 5000; from += 1000) {
+  for (let from = 0; from < 10000; from += 1000) {
     const { data, error } = await db.from('artists').select('id,name,listeners,rarity').order('listeners', { ascending: false }).range(from, from + 999)
     if (error) throw error
     out.push(...data)
