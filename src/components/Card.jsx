@@ -1,109 +1,130 @@
-import React from 'react'
+import { useState } from 'react'
+import { motion, useMotionTemplate, useMotionValue, useReducedMotion, useSpring, useTransform } from 'framer-motion'
+import { CARD_TYPES, DEPARTMENTS, RARITIES, rarityOf, tmdbImage, typeOf } from '../constants'
 
-// Utilitaire de formatage pour l'affichage des grands nombres (ex: 12500 -> 12,5k)
+// Utilitaire de formatage des grands nombres (ex: 12500 -> 12,5k)
 export const fmt = (n) => {
   if (n == null || isNaN(n)) return '—'
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k'
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.', ',') + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.', ',') + 'k'
   return String(Math.round(n))
 }
 
-const RARITY_STYLES = {
-  legendary: {
-    border: 'border-2 border-amber-400',
-    glow: 'shadow-[0_0_25px_rgba(245,158,11,0.4)]',
-    badge: 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-black font-black',
-    label: 'LÉGENDAIRE',
-  },
-  epic: {
-    border: 'border-2 border-purple-500',
-    glow: 'shadow-[0_0_20px_rgba(168,85,247,0.35)]',
-    badge: 'bg-purple-600 text-white font-bold',
-    label: 'ÉPIQUE',
-  },
-  rare: {
-    border: 'border-2 border-cyan-500',
-    glow: 'shadow-[0_0_15px_rgba(6,182,212,0.25)]',
-    badge: 'bg-cyan-600 text-white font-bold',
-    label: 'RARE',
-  },
-  common: {
-    border: 'border border-slate-700',
-    glow: 'shadow-lg',
-    badge: 'bg-slate-800 text-slate-300 font-medium',
-    label: 'COMMUNE',
-  },
+const SPRING = { stiffness: 180, damping: 18, mass: 0.6 }
+
+const initialsOf = (t) => t.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'
+
+// Image avec fallback propre : si TMDB échoue ou si le chemin est vide, on affiche les initiales.
+function Art({ src, title }) {
+  const [state, setState] = useState('loading') // loading | ready | error
+  if (!src || state === 'error') {
+    return <div className="tcg-placeholder"><span>{initialsOf(title)}</span></div>
+  }
+  return (
+    <img
+      src={src}
+      alt={title}
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      referrerPolicy="no-referrer"
+      onLoad={() => setState('ready')}
+      onError={() => setState('error')}
+      style={{ opacity: state === 'ready' ? 1 : 0 }}
+    />
+  )
 }
 
-export default function Card({ card, locked = false, count = 1, onClick }) {
+export default function Card({ card, locked = false, count = 1, onClick, tilt = true }) {
+  const reduce = useReducedMotion()
+  const mx = useMotionValue(0.5)
+  const my = useMotionValue(0.5)
+  const sx = useSpring(mx, SPRING)
+  const sy = useSpring(my, SPRING)
+  const rotateY = useTransform(sx, [0, 1], [-14, 14])
+  const rotateX = useTransform(sy, [0, 1], [14, -14])
+  const gx = useTransform(sx, (v) => `${v * 100}%`)
+  const gy = useTransform(sy, (v) => `${v * 100}%`)
+  const glare = useMotionTemplate`radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,.4), transparent 55%)`
+
   if (!card) return null
 
-  const isMovie = card.type === 'movie' || card.card_type === 'movie'
-  const rarityKey = card.rarity?.toLowerCase() || 'common'
-  const style = RARITY_STYLES[rarityKey] || RARITY_STYLES.common
-
-  // Titre & visuel selon le type (film vs personne)
+  const rarityKey = rarityOf(card)
+  const rarity = RARITIES[rarityKey]
+  const isMovie = typeOf(card) === 'movie'
   const title = card.title || card.name || 'Inconnu'
-  const image = card.poster || card.profile_path || card.poster_path
-  const imageSrc = image ? (image.startsWith('http') ? image : `https://image.tmdb.org/t/p/w500${image}`) : '/placeholder-card.png'
-  const subtitle = isMovie ? (card.release_date ? new Date(card.release_date).getFullYear() : 'Film') : (card.known_for_department || 'Acteur')
+  const subtitle = isMovie
+    ? (card.release_date ? new Date(card.release_date).getFullYear() : card.year) || 'Film'
+    : DEPARTMENTS[card.known_for_department || card.department] || 'Star'
+  const rating = card.vote_average ?? card.rating
+
+  const canTilt = tilt && !locked && !reduce
+  const interactive = typeof onClick === 'function'
+
+  const onMove = (e) => {
+    if (!canTilt || e.pointerType !== 'mouse') return
+    const r = e.currentTarget.getBoundingClientRect()
+    mx.set((e.clientX - r.left) / r.width)
+    my.set((e.clientY - r.top) / r.height)
+  }
+  const onLeave = () => { mx.set(0.5); my.set(0.5) }
 
   return (
     <div
+      className="tcg"
+      data-rarity={rarityKey}
+      data-locked={locked ? '' : undefined}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={locked ? `Carte ${rarity.label} à découvrir` : `${title}, carte ${rarity.label}`}
       onClick={onClick}
-      className={`group relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-slate-900 transition-all duration-300 hover:-translate-y-1.5 hover:scale-[1.02] cursor-pointer ${style.border} ${style.glow} ${locked ? 'grayscale opacity-40 hover:opacity-60' : ''}`}
+      onKeyDown={interactive ? (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onClick(e)) : undefined}
+      onPointerMove={onMove}
+      onPointerLeave={onLeave}
     >
-      {/* Arrière-plan Image */}
-      <img
-        src={imageSrc}
-        alt={title}
-        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        loading="lazy"
-      />
-
-      {/* Dégradé sombre pour la lisibilité */}
-      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent opacity-90" />
-
-      {/* En-tête : Badge Rareté & Type */}
-      <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 z-10">
-        <span className={`rounded-md px-2 py-0.5 text-[10px] tracking-wider uppercase ${style.badge}`}>
-          {style.label}
-        </span>
-        <span className="rounded-md bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[10px] font-semibold text-slate-200 border border-white/10">
-          {isMovie ? '🎬 Film' : '👤 Star'}
-        </span>
-      </div>
-
-      {/* Badge Exemplaires multiples (ex: x3) */}
-      {!locked && count > 1 && (
-        <div className="absolute top-10 right-2 z-10 rounded-full bg-amber-500 text-black font-extrabold text-xs px-2 py-0.5 shadow-md">
-          x{count}
-        </div>
-      )}
-
-      {/* Contenu bas de carte */}
-      <div className="absolute bottom-0 inset-x-0 p-3 z-10 flex flex-col gap-1">
-        <span className="text-[11px] font-medium text-amber-400 tracking-wide uppercase">
-          {subtitle}
-        </span>
-        <h3 className="font-display font-bold text-sm text-white leading-tight line-clamp-2 group-hover:text-amber-300 transition-colors">
-          {title}
-        </h3>
-
-        {/* Stats (Note ou Popularité) */}
-        <div className="mt-1 flex items-center justify-between border-t border-white/10 pt-1.5 text-[11px] text-slate-300">
-          {isMovie ? (
-            <span className="flex items-center gap-1 font-semibold text-yellow-400">
-              ★ {card.vote_average ?? card.rating ? Number(card.vote_average ?? card.rating).toFixed(1) : 'N/A'}
-            </span>
+      <motion.div
+        className="tcg-tilt"
+        style={canTilt ? { rotateX, rotateY, transformPerspective: 700 } : undefined}
+        whileHover={canTilt ? { scale: 1.04 } : undefined}
+        transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+      >
+        <div className="tcg-frame">
+          {locked ? (
+            <div className="tcg-body">
+              <span className="tcg-q" aria-hidden="true">?</span>
+              <span className="tcg-lock-label">{rarity.label}</span>
+            </div>
           ) : (
-            <span className="flex items-center gap-1 font-semibold text-cyan-400">
-              🔥 {Math.round(card.popularity || 0)} pts
-            </span>
+            <div className="tcg-body">
+              <div className="tcg-art"><Art key={tmdbImage(card)} src={tmdbImage(card)} title={title} /></div>
+              <div className="tcg-vignette" />
+              {rarityKey !== 'common' && <div className="tcg-foil" />}
+              {canTilt && <motion.div className="tcg-glare" style={{ background: glare }} />}
+              <div className="tcg-rim" />
+
+              <div className="tcg-head">
+                <span className="tcg-rarity">{rarity.label.toUpperCase()}</span>
+                <span className="tcg-type">{CARD_TYPES[isMovie ? 'movie' : 'person'].icon}</span>
+              </div>
+
+              {count > 1 && <div className="tcg-count">×{count}</div>}
+
+              <div className="tcg-foot">
+                <span className="tcg-sub">{subtitle}</span>
+                <h3 className="tcg-title">{title}</h3>
+                <div className="tcg-stats">
+                  {isMovie ? (
+                    <span style={{ color: '#fbbf24' }}>★ <b>{rating != null ? Number(rating).toFixed(1) : 'N/A'}</b></span>
+                  ) : (
+                    <span style={{ color: '#67e8f9' }}>🔥 <b>{fmt(Math.round(card.popularity || 0))}</b> pts</span>
+                  )}
+                  <span style={{ opacity: 0.5, letterSpacing: '.08em' }}>Cineclub</span>
+                </div>
+              </div>
+            </div>
           )}
-          <span className="text-[10px] text-slate-400 uppercase">Cineclub</span>
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }
