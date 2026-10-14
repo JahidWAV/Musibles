@@ -21,28 +21,39 @@ export default async function handler(req, res) {
 
   try {
     const [inventory, catalog] = await Promise.all([
-      // Correction : On sélectionne uniquement les colonnes réelles de user_inventory
+      // 1. On récupère l'inventaire brut de l'utilisateur
       fetchAll(() =>
         db.from('user_inventory')
           .select('card_type, card_id, acquired_at')
           .eq('user_id', user.id)
           .order('acquired_at', { ascending: true })),
       
+      // 2. On récupère le catalogue global pour avoir les détails des cartes
       fetchAll(() =>
         db.from('cards_catalog')
-          .select('card_type, card_id, rarity, popularity')
+          .select('*')
           .order('card_type', { ascending: true })
           .order('card_id', { ascending: true })),
     ])
 
-    // Une entrée par carte : construction de l'inventaire
+    // Création d'une Map pour associer rapidement les données du catalogue à l'inventaire
+    const catalogMap = new Map(catalog.map((c) => [`${c.card_type}:${c.card_id}`, c]))
+
+    // Construction de l'inventaire enrichi (une entrée par carte unique, avec le nombre de copies)
     const collection = {}
     for (const row of inventory) {
       const key = `${row.card_type}:${row.card_id}`
+      const catalogData = catalogMap.get(key) || {}
+
       if (collection[key]) {
         collection[key].count += 1
       } else {
-        collection[key] = toCard({ ...row, copies: 1, is_new: false })
+        collection[key] = toCard({
+          ...row,
+          ...catalogData, // On injecte les infos visuelles et textuelles du catalogue
+          copies: 1,
+          is_new: false,
+        })
       }
     }
 
@@ -52,6 +63,8 @@ export default async function handler(req, res) {
       id: c.card_id,
       rarity: c.rarity,
       popularity: Number(c.popularity) || 0,
+      title: c.title || c.name, // Support des deux formats (films/acteurs)
+      poster: c.poster || c.profile_path,
     }))
 
     return res.json({ collection, known })
