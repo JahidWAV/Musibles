@@ -1,5 +1,13 @@
 import React from 'react'
 
+// Utilitaire de formatage pour l'affichage des grands nombres (ex: 12500 -> 12,5k)
+export const fmt = (n) => {
+  if (n == null || isNaN(n)) return '—'
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k'
+  return String(Math.round(n))
+}
+
 const RARITY_STYLES = {
   legendary: {
     border: 'border-2 border-amber-400',
@@ -86,7 +94,7 @@ export default function Card({ card, locked = false, count = 1, onClick }) {
         <div className="mt-1 flex items-center justify-between border-t border-white/10 pt-1.5 text-[11px] text-slate-300">
           {isMovie ? (
             <span className="flex items-center gap-1 font-semibold text-yellow-400">
-              ★ {card.vote_average ? Number(card.vote_average).toFixed(1) : 'N/A'}
+              ★ {card.vote_average ?? card.rating ? Number(card.vote_average ?? card.rating).toFixed(1) : 'N/A'}
             </span>
           ) : (
             <span className="flex items-center gap-1 font-semibold text-cyan-400">
