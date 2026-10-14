@@ -25,46 +25,40 @@ export default function AuthScreen() {
     setSt({ busy: false, error: '', info: '' })
   }
 
-  const input = 'w-full rounded-xl bg-black/60 px-4 py-3 text-base text-ivory ring-1 ring-white/10 transition placeholder:text-mist/50 focus:ring-gold-500/70'
-
   return (
-    <main className="safe-top relative flex h-full flex-col items-center justify-center gap-7 overflow-hidden px-5">
+    <main className="safe-top relative flex h-full flex-col items-center justify-center gap-12 overflow-hidden px-6">
       <div className="beam" />
 
       <motion.div
         className="relative text-center"
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.9, ease: 'easeOut' }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.2 }}
       >
-        <h1 className="gold-text font-display text-5xl font-black tracking-[.14em] sm:text-6xl">CINECLUB</h1>
-        <div className="gold-rule mx-auto mt-3 w-40" />
-        <p className="mx-auto mt-3 max-w-xs text-sm text-mist">Connecte-toi pour retrouver ton album sur tous tes appareils.</p>
+        <h1 className="wordmark text-3xl sm:text-4xl">Cineclub</h1>
+        <div className="hairline mx-auto mt-5 w-48" />
+        <p className="title mx-auto mt-5 max-w-xs text-xl italic text-mist">Ta collection, sur tous tes écrans.</p>
       </motion.div>
 
       <motion.form
         onSubmit={submit}
-        className="relative w-full max-w-sm space-y-4 rounded-3xl bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-6 ring-1 ring-gold-500/25 backdrop-blur-md"
-        style={{ boxShadow: '0 30px 80px -30px rgba(245,158,11,.35)' }}
-        initial={{ opacity: 0, y: 24 }}
+        className="relative w-full max-w-sm space-y-6 border border-[var(--hair)] bg-black/40 p-8 backdrop-blur-sm"
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 0.25, ease: 'easeOut' }}
+        transition={{ duration: 0.8, delay: 0.3, ease: 'easeOut' }}
       >
-        <h2 className="font-display text-xl font-bold text-ivory">{mode === 'signin' ? 'Connexion' : 'Créer un compte'}</h2>
-        <input className={input} type="email" required autoComplete="email" placeholder="Email" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className={input} type="password" required minLength={6} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} placeholder="Mot de passe (6 caractères min.)" aria-label="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <h2 className="title text-2xl text-ivory">{mode === 'signin' ? 'Connexion' : 'Créer un compte'}</h2>
+        <input className="field" type="email" required autoComplete="email" placeholder="Email" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="field" type="password" required minLength={6} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} placeholder="Mot de passe (6 caractères min.)" aria-label="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)} />
         {st.error && <p role="alert" className="text-sm text-rose">{st.error}</p>}
         {st.info && <p role="status" className="text-sm text-mint">{st.info}</p>}
-        <button
-          disabled={st.busy}
-          className="w-full rounded-xl bg-gradient-to-b from-gold-300 to-gold-600 py-3 font-bold text-black shadow-gold-sm transition active:scale-[.98] disabled:opacity-50"
-        >
+        <button disabled={st.busy} className="btn btn-fill w-full">
           {st.busy ? 'Un instant…' : mode === 'signin' ? 'Se connecter' : 'Créer mon compte'}
         </button>
         <button
           type="button"
           onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setSt({ busy: false, error: '', info: '' }) }}
-          className="w-full py-1 text-sm text-mist underline underline-offset-4 hover:text-gold-300"
+          className="w-full text-sm text-mist underline underline-offset-4 transition-colors hover:text-gold-300"
         >
           {mode === 'signin' ? 'Pas de compte ? Créer un compte' : 'Déjà un compte ? Se connecter'}
         </button>
