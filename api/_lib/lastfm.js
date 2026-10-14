@@ -1,30 +1,46 @@
-/** Classement mondial : explore jusqu'à 100 pages (soit 5 000 artistes) et pagine pour ne pas surcharger les APIs */
-export async function seedCharts(maxPages = 100) {
-  const rows = new Map()
-  const chunkSize = 10 // Traitement par paquets de 10 pages simultanées
+import { db } from './db.js'
 
-  for (let i = 0; i < maxPages; i += chunkSize) {
-    const pagePromises = Array.from({ length: chunkSize }, (_, idx) => {
-      const page = i + idx + 1
-      if (page > maxPages) return null
-      return lfm({ method: 'chart.gettopartists', limit: 50, page }).catch(() => null)
-    }).filter(Boolean)
+// Fonction pour tirer un booster de cartes depuis Supabase selon les raretés
+export async function drawBooster(count = 5) {
+  const cards = []
 
-    const pages = await Promise.all(pagePromises)
+  // Définition des probabilités de rareté (ex: Commun, Rare, Épique, Légendaire)
+  // Tu peux ajuster ces pourcentages selon l'équilibrage de ton TCG
+  for (let i = 0; i < count; i++) {
+    const rand = Math.random() * 100
+    let targetRarity = 'common'
 
-    for (const d of pages) {
-      for (const a of d?.artists?.artist || []) {
-        if (!a?.name || !a?.listeners) continue
-        const listeners = +a.listeners
-        rows.set(slug(a.name), {
-          id: slug(a.name),
-          name: a.name,
-          listeners,
-          rarity: getRarity(listeners),
-        })
+    if (rand < 2) targetRarity = 'legendary'       // 2% de chance
+    else if (rand < 12) targetRarity = 'epic'     // 10% de chance
+    else if (rand < 35) targetRarity = 'rare'     // 23% de chance
+    else targetRarity = 'common'                  // 65% de chance
+
+    // Récupérer un artist aléatoire de cette rareté dans Supabase
+    // On utilise une requête SQL aléatoire ou un tirage optimisé
+    const { data, error } = await db
+      .from('artists')
+      .select('*')
+      .eq('rarity', targetRarity)
+      
+    if (error || !data || data.length === 0) {
+      // Fallback sur un commun si la requête échoue
+      const { data: fallbackData } = await db.from('artists').select('*').limit(1)
+      if (fallbackData && fallbackData.length > 0) {
+        cards.push(fallbackData[0])
       }
+      continue
+    }
+
+    // Sélection aléatoire parmi les artistes de la liste récupérée
+    const randomArtist = data[Math.floor(Math.random() * data.length)]
+    
+    // Évite les doublons dans le même booster si possible
+    if (!cards.some(c => c.id === randomArtist.id)) {
+      cards.push(randomArtist)
+    } else {
+      i-- // Retente un tirage pour ce slot
     }
   }
 
-  await upsert([...rows.values()], true)
+  return cards
 }
