@@ -3,6 +3,7 @@ import { DROP_RATES, TAGS, getRarity } from './config.js'
 
 const BASE = 'https://ws.audioscrobbler.com/2.0/'
 const LASTFM_PLACEHOLDER = '2a96cbd8b46e442fc41c2b86b821562f'
+const PAGE_SIZE = 50
 const DETAIL_TTL = 7 * 24 * 3600 * 1000
 
 const slug = (n) => n.toLowerCase().trim()
@@ -17,15 +18,20 @@ async function lfm(params) {
   return data
 }
 
-async function upsert(rows) {
+async function upsert(rows, ignoreDuplicates = false) {
   if (!rows.length) return
-  const { error } = await db.from('artists').upsert(rows, { onConflict: 'id' })
+  const { error } = await db.from('artists').upsert(rows, { onConflict: 'id', ignoreDuplicates })
   if (error) throw error
 }
 
-async function photo(artist) {
+const lastfmPhoto = (artist) => {
   const lf = artist.image?.find((i) => i.size === 'extralarge')?.['#text']
-  if (lf && !lf.includes(LASTFM_PLACEHOLDER)) return lf
+  return lf && !lf.includes(LASTFM_PLACEHOLDER) ? lf : null
+}
+
+async function photo(artist) {
+  const lf = lastfmPhoto(artist)
+  if (lf) return lf
   try {
     const key = process.env.THEAUDIODB_API_KEY || '2'
     const r = await fetch(`https://www.theaudiodb.com/api/v1/json/${key}/search.php?s=${encodeURIComponent(artist.name)}`)
@@ -33,25 +39,31 @@ async function photo(artist) {
   } catch { return null }
 }
 
-/** Récupère la fiche complète d'un artiste sur Last.fm et l'enregistre en base. */
-async function fetchDetail(name) {
+async function info(name) {
   const { artist } = await lfm({ method: 'artist.getinfo', artist: name, autocorrect: 1 })
   const listeners = +artist.stats.listeners
-  const row = {
-    id: slug(name),
-    name: artist.name,
-    listeners,
-    playcount: +artist.stats.playcount,
-    rarity: getRarity(listeners),
-    tags: (artist.tags?.tag || []).slice(0, 3).map((t) => t.name),
-    bio: (artist.bio?.summary || '').replace(/<a[\s\S]*?<\/a>/g, '').replace(/<[^>]+>/g, '').trim(),
-    url: artist.url,
-    image: await photo(artist),
-    detailed: true,
-    updated_at: new Date().toISOString(),
+  return {
+    artist,
+    row: {
+      id: slug(name),
+      name: artist.name,
+      listeners,
+      playcount: +artist.stats.playcount,
+      rarity: getRarity(listeners),
+      tags: (artist.tags?.tag || []).slice(0, 3).map((t) => t.name),
+      bio: (artist.bio?.summary || '').replace(/<a[\s\S]*?<\/a>/g, '').replace(/<[^>]+>/g, '').trim(),
+      url: artist.url,
+      updated_at: new Date().toISOString(),
+    },
   }
-  await upsert([row])
-  return row
+}
+
+/** Fiche complète (avec photo) d'un artiste, enregistrée en base. */
+async function fetchDetail(name) {
+  const { artist, row } = await info(name)
+  const full = { ...row, image: await photo(artist), detailed: true }
+  await upsert([full])
+  return full
 }
 
 /** Classement mondial (pages 1 à 20) : alimente les paliers Rare, Épique et Légendaire. */
@@ -88,7 +100,6 @@ async function countWhere(apply) {
 
 async function ensurePools() {
   if ((await countWhere((q) => q.neq('rarity', 'common'))) < 100) await seedCharts()
-  if ((await countWhere((q) => q.eq('rarity', 'common'))) < 20) await seedCommons()
 }
 
 function rollRarity() {
@@ -105,20 +116,71 @@ async function freshCard(id) {
 
 export const toCard = (r) => ({ id: r.id, name: r.name, listeners: r.listeners, playcount: r.playcount, rarity: r.rarity, tags: r.tags, bio: r.bio, url: r.url, image: r.image })
 
-/** Tire `count` cartes : rareté d'abord (DROP_RATES), puis un artiste du palier. */
+/**
+ * Tire `count` cartes : rareté d'abord (DROP_RATES), puis un artiste du palier.
+ * - Rare / Épique / Légendaire : tirés dans la base (alimentée par le classement mondial).
+ * - Commune : découverte EN DIRECT sur Last.fm (tag au hasard ou artistes similaires d'un artiste connu),
+ *   puis enregistrée en base. Le catalogue grandit donc à chaque booster.
+ */
 export async function drawBooster(count) {
   await ensurePools()
-  const pools = {}
   const used = new Set()
-  const picks = []
-  for (let i = 0; i < count; i++) {
-    for (const tier of [rollRarity(), 'rare', 'common']) {
-      if (!pools[tier]) pools[tier] = (await db.from('artists').select('id').eq('rarity', tier).limit(1000)).data || []
-      const free = pools[tier].filter((a) => !used.has(a.id))
-      if (free.length) { const a = rand(free); used.add(a.id); picks.push(a.id); break }
-    }
+  const totals = {}
+  const total = async (tier) =>
+    (totals[tier] ??= (await db.from('artists').select('id', { count: 'exact', head: true }).eq('rarity', tier)).count || 0)
+
+  async function randomRow(tier, columns) {
+    const n = await total(tier)
+    if (!n) return null
+    const o = Math.floor(Math.random() * n)
+    const { data } = await db.from('artists').select(columns).eq('rarity', tier).order('id').range(o, o)
+    return data?.[0] || null
   }
-  const cards = (await Promise.all(picks.map(freshCard))).filter(Boolean).map(toCard)
+
+  async function dbPick(tier) {
+    for (let k = 0; k < 6; k++) {
+      const row = await randomRow(tier, 'id')
+      if (row && !used.has(row.id)) { used.add(row.id); return row.id }
+    }
+    return null
+  }
+
+  async function liveCommon() {
+    for (let k = 0; k < 6; k++) {
+      try {
+        let names
+        const source = Math.random() < 0.5 ? await randomRow('common', 'name') : null
+        if (source) {
+          const d = await lfm({ method: 'artist.getsimilar', artist: source.name, limit: 100, autocorrect: 1 })
+          names = (d.similarartists?.artist || []).map((a) => a.name)
+        } else {
+          const d = await lfm({ method: 'tag.gettopartists', tag: rand(TAGS), limit: PAGE_SIZE, page: between(2, 25) })
+          names = d.topartists.artist.map((a) => a.name)
+        }
+        const name = rand(names.filter((n) => !used.has(slug(n))))
+        if (!name) continue
+        const { data: have } = await db.from('artists').select('*').eq('id', slug(name)).maybeSingle()
+        const row = have?.detailed && have.rarity === 'common' ? have : await fetchDetail(name)
+        if (row.rarity === 'common' && !used.has(row.id)) { used.add(row.id); return row }
+      } catch { /* on retente avec un autre artiste */ }
+    }
+    return null
+  }
+
+  async function one() {
+    const tier = rollRarity()
+    if (tier === 'common') { const row = await liveCommon(); if (row) return row }
+    for (const t of [tier, 'rare', 'common']) {
+      const id = await dbPick(t)
+      if (id) return freshCard(id)
+    }
+    return null
+  }
+
+  const seen = new Set()
+  const cards = (await Promise.all(Array.from({ length: count }, one)))
+    .filter((c) => c && !seen.has(c.id) && seen.add(c.id))
+    .map(toCard)
   if (!cards.length) throw new Error('Aucune carte disponible.')
   return cards
 }
