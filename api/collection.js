@@ -21,12 +21,13 @@ export default async function handler(req, res) {
 
   try {
     const [inventory, catalog] = await Promise.all([
+      // Correction : On sélectionne uniquement les colonnes réelles de user_inventory
       fetchAll(() =>
         db.from('user_inventory')
-          .select('card_type, card_id, rarity, snapshot')
+          .select('card_type, card_id, acquired_at')
           .eq('user_id', user.id)
-          .order('acquired_at', { ascending: true })
-          .order('id', { ascending: true })),
+          .order('acquired_at', { ascending: true })),
+      
       fetchAll(() =>
         db.from('cards_catalog')
           .select('card_type, card_id, rarity, popularity')
@@ -34,12 +35,15 @@ export default async function handler(req, res) {
           .order('card_id', { ascending: true })),
     ])
 
-    // Une entrée par carte : snapshot de la 1re copie, count = nombre d'exemplaires
+    // Une entrée par carte : construction de l'inventaire
     const collection = {}
     for (const row of inventory) {
       const key = `${row.card_type}:${row.card_id}`
-      if (collection[key]) collection[key].count += 1
-      else collection[key] = toCard({ ...row, copies: 1, is_new: false })
+      if (collection[key]) {
+        collection[key].count += 1
+      } else {
+        collection[key] = toCard({ ...row, copies: 1, is_new: false })
+      }
     }
 
     const known = catalog.map((c) => ({
