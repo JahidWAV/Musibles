@@ -4,28 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Noirs de salle obscure
-        night: '#050505',
-        dusk: '#0e0e12',
-        plum: '#2a2418', // bordures chaudes (ancien "plum", gardé pour compatibilité)
-        // Dorés
-        gold: { 300: '#fde68a', 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706', 700: '#b45309' },
-        honey: '#fbbf24',
-        // Accents
-        velvet: '#7f1d1d', // rideau / tapis rouge
-        mint: '#6ee7b7',
-        rose: '#fb7185',
-        mist: '#a8a29e', // texte secondaire, gris chaud
-        ivory: '#f5efe3',
+        night: '#060606',   // noir encre
+        dusk: '#0d0d0e',    // surfaces
+        plum: '#26231d',    // filets chauds (nom conservé pour compatibilité)
+        gold: { 300: '#e6d3a3', 400: '#d4bb83', 500: '#c8a96a', 600: '#a98a4e', 700: '#7d6637' }, // champagne mat
+        honey: '#c8a96a',
+        velvet: '#5a1a1f',
+        mint: '#8fc9b0',
+        rose: '#d9808c',
+        mist: '#948d80',    // texte secondaire
+        ivory: '#ece6d8',
       },
       fontFamily: {
-        display: ['Cinzel', 'Georgia', 'serif'],
+        display: ['"Cormorant Garamond"', 'Georgia', 'serif'],
         sans: ['Figtree', 'system-ui', 'sans-serif'],
       },
-      boxShadow: {
-        gold: '0 0 30px -6px rgba(251,191,36,.55)',
-        'gold-sm': '0 0 16px -4px rgba(251,191,36,.45)',
-      },
+      letterSpacing: { fine: '.18em' },
     },
   },
   plugins: [],
