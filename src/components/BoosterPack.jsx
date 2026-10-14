@@ -23,9 +23,9 @@ export default function BoosterPack({ onOpened, onOpenCard }) {
   if (phase !== 'open') {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-8 px-6 text-center">
-        <div className={`pack ${phase === 'loading' ? 'shake' : ''}`}>Musibles<br />♪</div>
+        <div className={`pack ${phase === 'loading' ? 'shake' : ''}`}>Cineclub<br />🎬</div>
         <div className="space-y-3">
-          <p className="text-mist">5 artistes tirés au hasard.</p>
+          <p className="text-mist">5 cartes (films et stars) tirées au hasard.</p>
           <button onClick={open} disabled={phase === 'loading'} className="rounded-full bg-honey px-8 py-3 text-lg font-bold text-night active:scale-95 disabled:opacity-60">
             {phase === 'loading' ? 'Ouverture…' : 'Ouvrir un booster'}
           </button>
@@ -40,11 +40,11 @@ export default function BoosterPack({ onOpened, onOpenCard }) {
       <p className="text-mist">{done ? 'Booster terminé !' : 'Touche une carte pour la retourner.'}</p>
       <div className="flex w-full max-w-md flex-wrap justify-center gap-3">
         {cards.map((c, i) => (
-          <div key={c.id} className="w-[30%] min-w-[96px]">
+          <div key={c.key} className="w-[30%] min-w-[96px]">
             <div className={`flip ${flipped[i] ? 'on' : ''}`} onClick={() => flip(i)} role="button" tabIndex={0}
               onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && flip(i)} aria-label={flipped[i] ? c.name : 'Carte face cachée'}>
               <div className="flip-in">
-                <div className="face"><div className="card-back">♪</div></div>
+                <div className="face"><div className="card-back">🎬</div></div>
                 <div className="face front">
                   {c.isNew && <span className="badge-new">Nouvelle</span>}
                   <Card card={c} onClick={() => {}} />
