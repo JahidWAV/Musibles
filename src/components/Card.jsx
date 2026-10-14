@@ -10,11 +10,11 @@ export const fmt = (n) => {
   return String(Math.round(n))
 }
 
-const SPRING = { stiffness: 180, damping: 18, mass: 0.6 }
+const SPRING = { stiffness: 160, damping: 20, mass: 0.7 }
 
 const initialsOf = (t) => t.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'
 
-// Image avec fallback propre : si TMDB échoue ou si le chemin est vide, on affiche les initiales.
+// Image avec repli propre : si TMDB échoue ou si le chemin est vide, on affiche les initiales.
 function Art({ src, title }) {
   const [state, setState] = useState('loading') // loading | ready | error
   if (!src || state === 'error') {
@@ -41,11 +41,11 @@ export default function Card({ card, locked = false, count = 1, onClick, tilt = 
   const my = useMotionValue(0.5)
   const sx = useSpring(mx, SPRING)
   const sy = useSpring(my, SPRING)
-  const rotateY = useTransform(sx, [0, 1], [-14, 14])
-  const rotateX = useTransform(sy, [0, 1], [14, -14])
+  const rotateY = useTransform(sx, [0, 1], [-8, 8])
+  const rotateX = useTransform(sy, [0, 1], [8, -8])
   const gx = useTransform(sx, (v) => `${v * 100}%`)
   const gy = useTransform(sy, (v) => `${v * 100}%`)
-  const glare = useMotionTemplate`radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,.4), transparent 55%)`
+  const glare = useMotionTemplate`radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,.2), transparent 55%)`
 
   if (!card) return null
 
@@ -53,8 +53,9 @@ export default function Card({ card, locked = false, count = 1, onClick, tilt = 
   const rarity = RARITIES[rarityKey]
   const isMovie = typeOf(card) === 'movie'
   const title = card.title || card.name || 'Inconnu'
+  const year = card.release_date ? new Date(card.release_date).getFullYear() : card.year
   const subtitle = isMovie
-    ? (card.release_date ? new Date(card.release_date).getFullYear() : card.year) || 'Film'
+    ? `Film${year ? ` · ${year}` : ''}`
     : DEPARTMENTS[card.known_for_department || card.department] || 'Star'
   const rating = card.vote_average ?? card.rating
 
@@ -84,9 +85,9 @@ export default function Card({ card, locked = false, count = 1, onClick, tilt = 
     >
       <motion.div
         className="tcg-tilt"
-        style={canTilt ? { rotateX, rotateY, transformPerspective: 700 } : undefined}
-        whileHover={canTilt ? { scale: 1.04 } : undefined}
-        transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+        style={canTilt ? { rotateX, rotateY, transformPerspective: 900 } : undefined}
+        whileHover={canTilt ? { scale: 1.025 } : undefined}
+        transition={{ type: 'spring', stiffness: 260, damping: 26 }}
       >
         <div className="tcg-frame">
           {locked ? (
@@ -103,22 +104,20 @@ export default function Card({ card, locked = false, count = 1, onClick, tilt = 
               <div className="tcg-rim" />
 
               <div className="tcg-head">
-                <span className="tcg-rarity">{rarity.label.toUpperCase()}</span>
-                <span className="tcg-type">{CARD_TYPES[isMovie ? 'movie' : 'person'].icon}</span>
+                <span className="tcg-rarity">{rarity.label}</span>
+                {count > 1 && <span className="tcg-count">×{count}</span>}
               </div>
-
-              {count > 1 && <div className="tcg-count">×{count}</div>}
 
               <div className="tcg-foot">
                 <span className="tcg-sub">{subtitle}</span>
                 <h3 className="tcg-title">{title}</h3>
                 <div className="tcg-stats">
                   {isMovie ? (
-                    <span style={{ color: '#fbbf24' }}>★ <b>{rating != null ? Number(rating).toFixed(1) : 'N/A'}</b></span>
+                    <span><b>{rating != null ? Number(rating).toFixed(1).replace('.', ',') : '—'}</b> / 10</span>
                   ) : (
-                    <span style={{ color: '#67e8f9' }}>🔥 <b>{fmt(Math.round(card.popularity || 0))}</b> pts</span>
+                    <span>Popularité <b>{fmt(Math.round(card.popularity || 0))}</b></span>
                   )}
-                  <span style={{ opacity: 0.5, letterSpacing: '.08em' }}>Cineclub</span>
+                  <span>{CARD_TYPES[isMovie ? 'movie' : 'person'].label}</span>
                 </div>
               </div>
             </div>
