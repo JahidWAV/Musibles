@@ -1,6 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CARD_TYPES, DEPARTMENTS, RARITIES, rarityOf, tmdbUrl, typeOf } from '../constants'
+import {
+  AUCTION_DURATIONS, AUCTION_FEE, CARD_TYPES, CURRENCY, DEPARTMENTS, RARITIES, SCRAP_VALUES,
+  fmtNum, rarityOf, tmdbUrl, typeOf,
+} from '../constants'
 import Card, { fmt } from './Card'
 
 const RARITY_TEXT = {
@@ -17,7 +20,7 @@ const Stat = ({ label, value }) => (
   </div>
 )
 
-export default function CardModal({ card, onClose }) {
+export default function CardModal({ card, onClose, onScrap, onAuction }) {
   useEffect(() => {
     if (!card) return
     const h = (e) => e.key === 'Escape' && onClose()
@@ -31,16 +34,105 @@ export default function CardModal({ card, onClose }) {
 
   return (
     <AnimatePresence>
-      {card && <Sheet key={card.key || card.id} card={card} onClose={onClose} />}
+      {card && <Sheet key={card.key || card.id} card={card} onClose={onClose} onScrap={onScrap} onAuction={onAuction} />}
     </AnimatePresence>
   )
 }
 
-function Sheet({ card, onClose }) {
+// ───────── Panneau « Recycler » ─────────
+function ScrapPanel({ card, max, onBack, onConfirm }) {
+  const unit = SCRAP_VALUES[rarityOf(card)]
+  const [qty, setQty] = useState(1)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function go() {
+    setBusy(true); setErr('')
+    try { await onConfirm(card, qty) } catch (e) { setErr(e.message); setBusy(false) }
+  }
+
+  return (
+    <div className="mt-8 border border-[var(--hair)] p-5 text-left">
+      <p className="title text-2xl text-ivory">Recycler</p>
+      <p className="mt-1 text-sm text-mist">
+        Chaque exemplaire rapporte <span className="text-gold-300">{fmtNum(unit)} {CURRENCY}</span>. L’opération est définitive.
+      </p>
+
+      {max > 1 && (
+        <div className="mt-4 flex items-center gap-4">
+          <button onClick={() => setQty((q) => Math.max(1, q - 1))} disabled={qty <= 1} aria-label="Moins" className="btn !px-4 !py-2">−</button>
+          <span className="title w-10 text-center text-2xl tabular-nums">{qty}</span>
+          <button onClick={() => setQty((q) => Math.min(max, q + 1))} disabled={qty >= max} aria-label="Plus" className="btn !px-4 !py-2">+</button>
+          <button onClick={() => setQty(max - 1 || 1)} className="ml-auto text-xs text-mist underline underline-offset-4 hover:text-gold-300">Garder 1 exemplaire</button>
+        </div>
+      )}
+
+      {qty >= max && <p className="mt-3 text-sm text-rose">C’est ta dernière copie : elle disparaîtra de l’album.</p>}
+      {err && <p role="alert" className="mt-3 text-sm text-rose">{err}</p>}
+
+      <div className="mt-5 flex gap-3">
+        <button onClick={onBack} disabled={busy} className="btn flex-1">Retour</button>
+        <button onClick={go} disabled={busy} className="btn btn-fill flex-1">{busy ? '…' : `+ ${fmtNum(unit * qty)} ${CURRENCY}`}</button>
+      </div>
+    </div>
+  )
+}
+
+// ───────── Panneau « Mettre aux enchères » ─────────
+function AuctionPanel({ card, onBack, onConfirm }) {
+  const unit = SCRAP_VALUES[rarityOf(card)]
+  const [price, setPrice] = useState(unit * 2)
+  const [hours, setHours] = useState(24)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function go() {
+    setBusy(true); setErr('')
+    try { await onConfirm(card, { price: Number(price), hours }) } catch (e) { setErr(e.message); setBusy(false) }
+  }
+
+  return (
+    <div className="mt-8 border border-[var(--hair)] p-5 text-left">
+      <p className="title text-2xl text-ivory">Mettre aux enchères</p>
+      <p className="mt-1 text-sm text-mist">
+        Un exemplaire est proposé. Commission de {Math.round(AUCTION_FEE * 100)} % sur le prix final ; sans offre, la carte te revient.
+      </p>
+
+      <label htmlFor="start-price" className="mt-4 block text-[.65rem] uppercase tracking-[.2em] text-mist">Mise de départ ({CURRENCY})</label>
+      <input id="start-price" type="number" inputMode="numeric" min="1" step="1" className="field tabular-nums" value={price} onChange={(e) => setPrice(e.target.value)} />
+
+      <p className="mt-4 text-[.65rem] uppercase tracking-[.2em] text-mist">Durée</p>
+      <div className="mt-2 flex gap-2">
+        {AUCTION_DURATIONS.map((d) => (
+          <button
+            key={d.hours}
+            onClick={() => setHours(d.hours)}
+            aria-pressed={hours === d.hours}
+            className={`flex-1 border py-2 text-sm transition-colors ${hours === d.hours ? 'border-gold-500 text-gold-300' : 'border-white/10 text-mist hover:text-ivory'}`}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
+
+      {err && <p role="alert" className="mt-3 text-sm text-rose">{err}</p>}
+
+      <div className="mt-5 flex gap-3">
+        <button onClick={onBack} disabled={busy} className="btn flex-1">Retour</button>
+        <button onClick={go} disabled={busy || !(Number(price) >= 1)} className="btn btn-fill flex-1">{busy ? '…' : 'Lancer l’enchère'}</button>
+      </div>
+    </div>
+  )
+}
+
+function Sheet({ card, onClose, onScrap, onAuction }) {
+  const [panel, setPanel] = useState(null) // null | 'scrap' | 'auction'
   const rarityKey = rarityOf(card)
   const isMovie = typeOf(card) === 'movie'
   const type = CARD_TYPES[isMovie ? 'movie' : 'person']
   const name = card.title || card.name || 'Inconnu'
+  const owned = card.count ?? 1
+  const canAct = typeof onScrap === 'function'
 
   const rating = card.vote_average ?? card.rating
   const votes = card.vote_count ?? card.votes
@@ -68,17 +160,12 @@ function Sheet({ card, onClose }) {
         transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
       >
         <div className="sheet-spot" />
-        <button
-          onClick={onClose}
-          aria-label="Fermer"
-          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center text-xl font-light text-mist transition-colors hover:text-ivory"
-        >
-          ✕
-        </button>
+        <button onClick={onClose} aria-label="Fermer" className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center text-xl font-light text-mist transition-colors hover:text-ivory">✕</button>
 
-        <div className="relative flex flex-col items-center gap-8 md:flex-row md:items-center md:gap-14">
+        <div className="relative flex flex-col items-center gap-8 md:flex-row md:items-start md:gap-14">
           <div className="w-52 shrink-0 md:w-72">
             <Card card={card} />
+            {owned > 1 && <p className="mt-3 text-center text-xs text-mist">{owned} exemplaires</p>}
           </div>
 
           <div className="w-full text-center md:text-left">
@@ -87,7 +174,7 @@ function Sheet({ card, onClose }) {
             </p>
             <h2 className="title mt-2 text-4xl leading-[1.05] text-ivory md:text-5xl">{name}</h2>
             <p className="mt-3 text-sm text-mist">{RARITY_TEXT[rarityKey]}</p>
-            <div className="hairline my-6 md:mr-auto md:w-full" />
+            <div className="hairline my-6" />
 
             <dl className="grid grid-cols-2 gap-3 text-left">
               {isMovie ? (
@@ -105,17 +192,30 @@ function Sheet({ card, onClose }) {
               )}
             </dl>
 
-            {isMovie && card.overview && (
+            {isMovie && card.overview && !panel && (
               <p className="mt-6 max-w-prose text-left text-sm leading-relaxed text-mist">
                 {card.overview.slice(0, 260)}
                 {card.overview.length > 260 ? '…' : ''}
               </p>
             )}
 
-            <div className="mt-8 flex gap-3">
-              <a href={tmdbUrl(card)} target="_blank" rel="noreferrer" className="btn flex-1">Voir sur TMDB</a>
-              <button onClick={onClose} className="btn btn-fill flex-1">Fermer</button>
-            </div>
+            {panel === 'scrap' && <ScrapPanel card={card} max={owned} onBack={() => setPanel(null)} onConfirm={onScrap} />}
+            {panel === 'auction' && <AuctionPanel card={card} onBack={() => setPanel(null)} onConfirm={onAuction} />}
+
+            {!panel && (
+              <div className="mt-8 space-y-3">
+                {canAct && (
+                  <div className="flex gap-3">
+                    <button onClick={() => setPanel('scrap')} className="btn flex-1">Recycler · +{fmtNum(SCRAP_VALUES[rarityKey])}</button>
+                    <button onClick={() => setPanel('auction')} className="btn flex-1">Enchères</button>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <a href={tmdbUrl(card)} target="_blank" rel="noreferrer" className="btn flex-1">Voir sur TMDB</a>
+                  <button onClick={onClose} className="btn btn-fill flex-1">Fermer</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
