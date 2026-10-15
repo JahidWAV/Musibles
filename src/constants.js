@@ -21,7 +21,6 @@ export const DEPARTMENTS = {
 export const CURRENCY = 'bobines'
 // Valeur de recyclage : doit rester identique à scrap_value() dans market.sql
 export const SCRAP_VALUES = { common: 1, rare: 10, epic: 100, legendary: 1000 }
-export const AUCTION_FEE = 0.05 // commission sur les ventes
 export const AUCTION_DURATIONS = [
   { hours: 6, label: '6 h' },
   { hours: 12, label: '12 h' },
