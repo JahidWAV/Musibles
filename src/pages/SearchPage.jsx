@@ -21,10 +21,8 @@ export default function SearchPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
 
-  // Cache mémoire pour éviter de recharger la même page lors de la navigation
   const cacheRef = useRef(new Map())
 
-  // Debounce sur la frappe au clavier (300ms)
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(query)
@@ -37,7 +35,6 @@ export default function SearchPage() {
     const cleanQuery = debouncedQuery.trim()
     const cacheKey = `${cleanQuery.toLowerCase()}_${selectedRarity}_${page}`
     
-    // Si la page est déjà en cache, affichage immédiat
     if (cacheRef.current.has(cacheKey)) {
       const cached = cacheRef.current.get(cacheKey)
       setMovies(cached.movies)
@@ -48,10 +45,9 @@ export default function SearchPage() {
 
     setLoading(true)
 
-    // Sélection sécurisée des colonnes existantes dans la base
     let dbQuery = supabase
       .from('movies')
-      .select('id, title, release_date, poster, vote_average, popularity, rarity')
+      .select('id, title, release_date, poster, backdrop, vote_average, popularity, rarity')
 
     if (cleanQuery) {
       dbQuery = dbQuery.ilike('title', `%${cleanQuery}%`)
@@ -76,7 +72,6 @@ export default function SearchPage() {
       const more = data.length > PAGE_SIZE
       const list = data.slice(0, PAGE_SIZE)
 
-      // Stockage en cache
       cacheRef.current.set(cacheKey, { movies: list, hasMore: more })
 
       setMovies(list)
@@ -155,11 +150,11 @@ export default function SearchPage() {
             {movies.map((movie) => {
               const owned = collection[movie.id]
               
-              // Normalisation pour passer directement l'URL complète du poster
+              // Normalisation complète pour correspondre aux propriétés attendues par la Carte
               const formattedMovie = {
                 ...movie,
-                poster: movie.poster,
                 poster_path: movie.poster,
+                poster: movie.poster,
                 type: 'movie',
                 key: `movie_${movie.id}`
               }
