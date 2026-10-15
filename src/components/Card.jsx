@@ -35,6 +35,7 @@ function Art({ src, title }) {
   )
 }
 
+// bare = poster nu (vue zoomée) : aucun overlay, aucun texte par-dessus, seulement le tour de rareté.
 export default function Card({ card, locked = false, count = 1, onClick, tilt = true, bare = false }) {
   const reduce = useReducedMotion()
   const mx = useMotionValue(0.5)
@@ -75,6 +76,7 @@ export default function Card({ card, locked = false, count = 1, onClick, tilt = 
       className="tcg"
       data-rarity={rarityKey}
       data-locked={locked ? '' : undefined}
+      data-bare={bare ? '' : undefined}
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-label={locked ? `Carte ${rarity.label} à découvrir` : `${title}, carte ${rarity.label}`}
@@ -98,28 +100,33 @@ export default function Card({ card, locked = false, count = 1, onClick, tilt = 
           ) : (
             <div className="tcg-body">
               <div className="tcg-art"><Art key={tmdbImage(card)} src={tmdbImage(card)} title={title} /></div>
-              <div className="tcg-vignette" />
-              {rarityKey !== 'common' && <div className="tcg-foil" />}
-              {canTilt && <motion.div className="tcg-glare" style={{ background: glare }} />}
-              <div className="tcg-rim" />
 
-              <div className="tcg-head">
-                <span className="tcg-rarity">{rarity.label}</span>
-                {count > 1 && <span className="tcg-count">×{count}</span>}
-              </div>
+              {!bare && (
+                <>
+                  <div className="tcg-vignette" />
+                  {rarityKey !== 'common' && <div className="tcg-foil" />}
+                  {canTilt && <motion.div className="tcg-glare" style={{ background: glare }} />}
+                  <div className="tcg-rim" />
 
-              <div className="tcg-foot">
-                <span className="tcg-sub">{subtitle}</span>
-                <h3 className="tcg-title">{title}</h3>
-                <div className="tcg-stats">
-                  {isMovie ? (
-                    <span><b>{rating != null ? Number(rating).toFixed(1).replace('.', ',') : '—'}</b> / 10</span>
-                  ) : (
-                    <span>Popularité <b>{fmt(Math.round(card.popularity || 0))}</b></span>
-                  )}
-                  <span>{CARD_TYPES[isMovie ? 'movie' : 'person'].label}</span>
-                </div>
-              </div>
+                  <div className="tcg-head">
+                    <span className="tcg-rarity">{rarity.label}</span>
+                    {count > 1 && <span className="tcg-count">×{count}</span>}
+                  </div>
+
+                  <div className="tcg-foot">
+                    <span className="tcg-sub">{subtitle}</span>
+                    <h3 className="tcg-title">{title}</h3>
+                    <div className="tcg-stats">
+                      {isMovie ? (
+                        <span><b>{rating != null ? Number(rating).toFixed(1).replace('.', ',') : '—'}</b> / 10</span>
+                      ) : (
+                        <span>Popularité <b>{fmt(Math.round(card.popularity || 0))}</b></span>
+                      )}
+                      <span>{CARD_TYPES[isMovie ? 'movie' : 'person'].label}</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
