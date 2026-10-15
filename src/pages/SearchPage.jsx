@@ -48,10 +48,10 @@ export default function SearchPage() {
 
     setLoading(true)
 
-    // Sélection sécurisée incluant à la fois poster et poster_path
+    // Sélection uniquement de la colonne 'poster' existante dans la table movies
     let dbQuery = supabase
       .from('movies')
-      .select('id, title, release_date, poster, poster_path, vote_average, popularity, rarity')
+      .select('id, title, release_date, poster, vote_average, popularity, rarity')
 
     if (cleanQuery) {
       dbQuery = dbQuery.ilike('title', `%${cleanQuery}%`)
@@ -155,12 +155,9 @@ export default function SearchPage() {
             {movies.map((movie) => {
               const owned = collection[movie.id]
               
-              // Normalisation robuste pour alimenter correctement les helpers d'image de la carte
-              const posterValue = movie.poster || movie.poster_path
+              // Normalisation pour s'assurer que les propriétés de la carte sont cohérentes
               const formattedMovie = {
                 ...movie,
-                poster: posterValue,
-                poster_path: posterValue,
                 type: 'movie',
                 key: `movie_${movie.id}`
               }
