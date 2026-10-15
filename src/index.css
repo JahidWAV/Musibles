@@ -149,6 +149,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .tcg-q { font: 300 34cqw/1 'Cormorant Garamond', serif; color: rgba(200, 169, 106, .18); }
 .tcg-lock-label { font: 500 max(7.5px, 4.4cqw) Figtree, sans-serif; letter-spacing: .24em; text-transform: uppercase; color: rgba(148, 141, 128, .55); }
 
+/* Vue zoomée : poster nu, tour de rareté épaissi et lumineux */
+.tcg[data-bare] .tcg-frame {
+  padding: max(3px, 2.2cqw);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent),
+    0 0 34px -4px color-mix(in srgb, var(--c) 70%, transparent),
+    0 18px 28px -18px rgba(0, 0, 0, .9);
+}
+.tcg[data-bare][data-rarity='common'] .tcg-frame { background: var(--c); }
+.tcg[data-bare] .tcg-body { border-radius: 1.4cqw; }
+
 /* ───────── Booster ───────── */
 .flip { perspective: 1200px; aspect-ratio: 2 / 3; cursor: pointer; position: relative; }
 .flip-in { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
