@@ -9,7 +9,6 @@ export default async function handler(req, res) {
 
   const cooldown = Number(process.env.BOOSTER_COOLDOWN_SECONDS) || 0
   
-  // 1. Vérification du cooldown et récupération de la liste brute via la fonction SQL
   const { data: rawMovies, error } = await db.rpc('open_booster_for', {
     p_user: user.id,
     p_cooldown: cooldown,
@@ -28,19 +27,18 @@ export default async function handler(req, res) {
     return res.status(500).json({ message: 'Aucun film disponible.' })
   }
 
-  // 2. Vrai mélange aléatoire (Fisher-Yates shuffle) de TOUS les films en mémoire Node.js
+  // Mélange aléatoire Fisher-Yates
   const shuffled = [...rawMovies]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
 
-  // 3. Sélection de 5 cartes uniques en évitant d'accumuler la même année
+  // Sélection rigoureuse : interdiction d'avoir deux fois la même année si possible
   const selectedMovies = []
   const usedIds = new Set()
   const usedYears = new Set()
 
-  // Première passe : privilégier des années différentes pour la diversité visuelle
   for (const movie of shuffled) {
     if (selectedMovies.length >= BOOSTER_SIZE) break
     const year = movie.release_date ? String(movie.release_date).slice(0, 4) : 'unknown'
@@ -52,7 +50,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // Deuxième passe : compléter si besoin sans doublon d'ID
+  // Si on manque de cartes à cause des années, on complète sans doublon d'ID
   for (const movie of shuffled) {
     if (selectedMovies.length >= BOOSTER_SIZE) break
     if (!usedIds.has(movie.id)) {
@@ -61,7 +59,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // 4. Attribution des raretés et insertion dans l'inventaire utilisateur
   const insertedCards = []
 
   for (const movie of selectedMovies) {
