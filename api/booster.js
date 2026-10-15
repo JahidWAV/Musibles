@@ -2,9 +2,9 @@ import { db, requireUser } from './_lib/db.js'
 import { BOOSTER_SIZE } from './_lib/config.js'
 import { toCard } from './_lib/cards.js'
 
-const MIN_YEAR = Number(process.env.BOOSTER_MIN_YEAR) || 1950 // plus petite année tirable
+const MIN_YEAR = Number(process.env.BOOSTER_MIN_YEAR) || 1895 // plus petite année tirable
 const COUNT_TTL_MS = 60 * 60 * 1000 //                         nb de films par année, gardé 1 h
-const MOVIE_COLUMNS = 'id, title, release_date, overview, poster, backdrop, popularity, vote_average, vote_count'
+const MOVIE_COLUMNS = 'id, title, release_date, overview, poster, backdrop, popularity, vote_average, vote_count, rarity'
 
 const PACK_MAX = 10
 const PACK_COOLDOWN_SECONDS = 600
@@ -83,7 +83,7 @@ async function pickIds(count) {
   return ids
 }
 
-// SELECT ciblé : seulement les ids retenus
+// SELECT ciblé : seulement les ids retenus (inclut la rareté de la BD)
 async function fetchMovies(ids) {
   const { data, error } = await db.from('movies').select(MOVIE_COLUMNS).in('id', ids)
   if (error) throw error
@@ -96,16 +96,6 @@ async function drawMovies(count) {
   const movies = await step('fetchMovies', () => fetchMovies(ids))
   // .in() renvoie dans l'ordre de la table : on remélange l'ordre de révélation
   return sample(movies, movies.length)
-}
-
-// ───────── Rareté ─────────
-
-function rollRarity() {
-  const roll = Math.random() * 100
-  if (roll <= 1) return 'legendary' // 1 %
-  if (roll <= 6) return 'epic' //      5 %
-  if (roll <= 20) return 'rare' //     14 %
-  return 'common' //                   80 %
 }
 
 // ───────── Stock de packs ─────────
@@ -154,12 +144,12 @@ export default async function handler(req, res) {
     const movies = await drawMovies(BOOSTER_SIZE)
     if (movies.length === 0) throw Object.assign(new Error('Aucun film disponible.'), { step: 'drawMovies' })
 
-    // 3) Un seul INSERT pour toutes les cartes
+    // 3) Un seul INSERT pour toutes les cartes (utilise la rareté réelle de la BD)
     const rows = movies.map((movie) => ({
       user_id: user.id,
       card_type: 'movie',
       card_id: movie.id,
-      rarity: rollRarity(),
+      rarity: movie.rarity || 'common',
       snapshot: {
         title: movie.title,
         poster: movie.poster,
@@ -169,6 +159,7 @@ export default async function handler(req, res) {
         vote_count: movie.vote_count,
         overview: movie.overview,
         popularity: movie.popularity,
+        rarity: movie.rarity || 'common',
       },
     }))
 
