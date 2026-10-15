@@ -21,8 +21,10 @@ export default function SearchPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
 
+  // Cache mémoire pour éviter de recharger la même page lors de la navigation
   const cacheRef = useRef(new Map())
 
+  // Debounce sur la frappe au clavier (300ms)
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(query)
@@ -35,6 +37,7 @@ export default function SearchPage() {
     const cleanQuery = debouncedQuery.trim()
     const cacheKey = `${cleanQuery.toLowerCase()}_${selectedRarity}_${page}`
     
+    // Si la page est déjà en cache, affichage immédiat
     if (cacheRef.current.has(cacheKey)) {
       const cached = cacheRef.current.get(cacheKey)
       setMovies(cached.movies)
@@ -45,9 +48,10 @@ export default function SearchPage() {
 
     setLoading(true)
 
+    // Sélection sécurisée incluant à la fois poster et poster_path
     let dbQuery = supabase
       .from('movies')
-      .select('id, title, release_date, poster, backdrop, vote_average, popularity, rarity')
+      .select('id, title, release_date, poster, poster_path, vote_average, popularity, rarity')
 
     if (cleanQuery) {
       dbQuery = dbQuery.ilike('title', `%${cleanQuery}%`)
@@ -72,6 +76,7 @@ export default function SearchPage() {
       const more = data.length > PAGE_SIZE
       const list = data.slice(0, PAGE_SIZE)
 
+      // Stockage en cache
       cacheRef.current.set(cacheKey, { movies: list, hasMore: more })
 
       setMovies(list)
@@ -150,11 +155,12 @@ export default function SearchPage() {
             {movies.map((movie) => {
               const owned = collection[movie.id]
               
-              // Normalisation complète pour correspondre aux propriétés attendues par la Carte
+              // Normalisation robuste pour alimenter correctement les helpers d'image de la carte
+              const posterValue = movie.poster || movie.poster_path
               const formattedMovie = {
                 ...movie,
-                poster_path: movie.poster,
-                poster: movie.poster,
+                poster: posterValue,
+                poster_path: posterValue,
                 type: 'movie',
                 key: `movie_${movie.id}`
               }
