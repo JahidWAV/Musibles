@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { openBooster } from '../services/api'
 import { rarityOf } from '../constants'
+import { usePacks } from '../usePacks'
 import Card from './Card'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -12,19 +13,33 @@ export default function BoosterPack({ onOpened, onOpenCard }) {
   const [flipped, setFlipped] = useState([])
   const [flash, setFlash] = useState(false)
   const [error, setError] = useState('')
+  const { info, setInfo, countdown } = usePacks()
+
+  const max = info?.max ?? 10
+  const empty = !!info && info.packs <= 0
 
   async function open() {
     setPhase('tearing'); setError('')
     try {
       // cartes déjà attribuées côté serveur ; on garantit 1,5 s de suspense minimum
-      const [{ cards: drawn }] = await Promise.all([openBooster(), sleep(1500)])
+      const [res] = await Promise.all([openBooster(), sleep(1500)])
+      const { cards: drawn, ...stock } = res
+      setInfo((prev) => ({ ...prev, ...stock })) // packs restants + prochain pack
       setFlash(true)
       await sleep(300)
       setCards(drawn); setFlipped(drawn.map(() => false)); setPhase('open')
       onOpened()
       await sleep(500)
       setFlash(false)
-    } catch (e) { setError(e.message); setPhase('idle') }
+    } catch (e) {
+      // 429 : plus de packs, le serveur renvoie le stock à jour
+      if (e.status === 429 && e.data?.packs !== undefined) {
+        const { message, ...stock } = e.data
+        setInfo((prev) => ({ ...prev, ...stock }))
+      }
+      setError(e.message)
+      setPhase('idle')
+    }
   }
 
   const flip = (i) => (flipped[i] ? onOpenCard(cards[i]) : setFlipped((f) => f.map((v, j) => (j === i ? true : v))))
@@ -49,7 +64,7 @@ export default function BoosterPack({ onOpened, onOpenCard }) {
 
   if (phase !== 'open') {
     return (
-      <div className="relative flex h-full flex-col items-center justify-center gap-12 overflow-hidden px-6 text-center">
+      <div className="relative flex h-full flex-col items-center justify-center gap-10 overflow-hidden px-6 text-center">
         <div className="beam" />
         <motion.div
           className="relative"
@@ -65,9 +80,23 @@ export default function BoosterPack({ onOpened, onOpenCard }) {
         </motion.div>
 
         <div className="relative space-y-5">
+          <div>
+            <p className="title text-2xl text-ivory">
+              {info ? info.packs : '…'} <span className="text-mist">/ {max} packs</span>
+            </p>
+            <p className="mt-1 text-sm text-mist" aria-live="polite">
+              {!info
+                ? 'Chargement…'
+                : info.packs >= max
+                  ? 'Stock plein'
+                  : countdown
+                    ? `Prochain pack dans ${countdown}`
+                    : 'Un pack arrive…'}
+            </p>
+          </div>
           <p className="text-sm text-mist">Cinq cartes, films et stars, tirées au hasard.</p>
-          <button onClick={open} disabled={tearing} className="btn btn-fill">
-            {tearing ? 'Ouverture…' : 'Ouvrir un booster'}
+          <button onClick={open} disabled={tearing || !info || empty} className="btn btn-fill">
+            {tearing ? 'Ouverture…' : empty ? 'Aucun pack disponible' : 'Ouvrir un booster'}
           </button>
           {error && <p role="alert" className="text-sm text-rose">{error}</p>}
         </div>
@@ -126,9 +155,18 @@ export default function BoosterPack({ onOpened, onOpenCard }) {
         })}
       </div>
 
-      <div className="relative">
+      <div className="relative space-y-3 text-center">
         {done ? (
-          <button onClick={() => setPhase('idle')} className="btn btn-fill">Ouvrir un autre booster</button>
+          <>
+            <button onClick={() => setPhase('idle')} className="btn btn-fill">
+              {empty ? 'Retour' : 'Ouvrir un autre booster'}
+            </button>
+            {info && (
+              <p className="text-sm text-mist">
+                {info.packs} / {max} packs{countdown && info.packs < max ? ` · prochain dans ${countdown}` : ''}
+              </p>
+            )}
+          </>
         ) : (
           <button onClick={() => setFlipped(cards.map(() => true))} className="btn">Tout retourner</button>
         )}
