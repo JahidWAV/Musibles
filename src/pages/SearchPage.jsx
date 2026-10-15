@@ -34,7 +34,8 @@ export default function SearchPage() {
   }, [query])
 
   const fetchCatalogue = useCallback(async () => {
-    const cacheKey = `${debouncedQuery.trim().toLowerCase()}_${selectedRarity}_${page}`
+    const cleanQuery = debouncedQuery.trim()
+    const cacheKey = `${cleanQuery.toLowerCase()}_${selectedRarity}_${page}`
     
     // Si la page est déjà en cache, affichage immédiat
     if (cacheRef.current.has(cacheKey)) {
@@ -47,12 +48,11 @@ export default function SearchPage() {
 
     setLoading(true)
 
-    // Selection exacte des champs necessaires, avec poster ET poster_path pour assurer le bon affichage
+    // Sélection sécurisée des colonnes existantes dans la base
     let dbQuery = supabase
       .from('movies')
-      .select('id, title, release_date, poster, poster_path, vote_average, popularity, rarity')
+      .select('id, title, release_date, poster, vote_average, popularity, rarity')
 
-    const cleanQuery = debouncedQuery.trim()
     if (cleanQuery) {
       dbQuery = dbQuery.ilike('title', `%${cleanQuery}%`)
     }
@@ -68,7 +68,11 @@ export default function SearchPage() {
       .order('popularity', { ascending: false })
       .range(from, to)
 
-    if (!error && data) {
+    if (error) {
+      console.error('Erreur Supabase Catalogue:', error)
+      setMovies([])
+      setHasMore(false)
+    } else if (data) {
       const more = data.length > PAGE_SIZE
       const list = data.slice(0, PAGE_SIZE)
 
@@ -77,9 +81,6 @@ export default function SearchPage() {
 
       setMovies(list)
       setHasMore(more)
-    } else {
-      setMovies([])
-      setHasMore(false)
     }
     setLoading(false)
   }, [debouncedQuery, selectedRarity, page])
@@ -154,11 +155,10 @@ export default function SearchPage() {
             {movies.map((movie) => {
               const owned = collection[movie.id]
               
-              // Normalisation de la structure pour que le composant Card affiche le poster correctement
+              // Normalisation pour que le composant Card trouve bien le poster
               const formattedMovie = {
                 ...movie,
-                poster_path: movie.poster_path || movie.poster,
-                poster: movie.poster || movie.poster_path,
+                poster_path: movie.poster,
                 type: 'movie',
                 key: `movie_${movie.id}`
               }
