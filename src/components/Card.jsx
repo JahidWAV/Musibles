@@ -35,7 +35,7 @@ function Art({ src, title }) {
   )
 }
 
-export default function Card({ card, locked = false, count = 1, onClick, tilt = true }) {
+export default function Card({ card, locked = false, count = 1, onClick, tilt = true, bare = false }) {
   const reduce = useReducedMotion()
   const mx = useMotionValue(0.5)
   const my = useMotionValue(0.5)
