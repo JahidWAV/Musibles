@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../services/supabase'
 import { RARITIES } from '../constants'
 import Card from '../components/Card'
@@ -14,23 +14,33 @@ const PAGE_SIZE = 24
 export default function SearchPage() {
   const { openCard, collection } = useApp()
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selectedRarity, setSelectedRarity] = useState('all')
   const [movies, setMovies] = useState([])
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(0)
-  const [totalCount, setTotalCount] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
 
-  // Recherche avec debounce/effet
+  // 1. Effet de Debounce sur la recherche (attend 300ms après la frappe)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query)
+      setPage(0) // Retour à la première page à chaque nouvelle recherche
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  // 2. Requête optimisée (sans le comptage exact lourd)
   const fetchCatalogue = useCallback(async () => {
     setLoading(true)
     
     let dbQuery = supabase
       .from('movies')
-      .select('id, title, release_date, poster, vote_average, popularity, rarity', { count: 'exact' })
+      .select('id, title, release_date, poster, vote_average, popularity, rarity')
 
-    // Filtre texte (titre)
-    if (query.trim()) {
-      dbQuery = dbQuery.ilike('title', `%${query.trim()}%`)
+    // Filtre texte (titre) sécurisé
+    if (debouncedQuery.trim()) {
+      dbQuery = dbQuery.ilike('title', `%${debouncedQuery.trim()}%`)
     }
 
     // Filtre par rareté
@@ -38,38 +48,33 @@ export default function SearchPage() {
       dbQuery = dbQuery.eq('rarity', selectedRarity)
     }
 
-    // Pagination & Tri par popularité
+    // Pagination propre (on charge PAGE_SIZE + 1 pour savoir s'il y a une page suivante sans faire de COUNT)
     const from = page * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
+    const to = from + PAGE_SIZE
 
-    const { data, count, error } = await dbQuery
+    const { data, error } = await dbQuery
       .order('popularity', { ascending: false })
       .range(from, to)
 
     if (!error && data) {
-      setMovies(data)
-      setTotalCount(count || 0)
+      setHasMore(data.length > PAGE_SIZE)
+      setMovies(data.slice(0, PAGE_SIZE)) // On garde seulement les 24 demandés
+    } else {
+      setMovies([])
+      setHasMore(false)
     }
     setLoading(false)
-  }, [query, selectedRarity, page])
+  }, [debouncedQuery, selectedRarity, page])
 
   useEffect(() => {
     document.title = 'Catalogue · Cineclub'
     fetchCatalogue()
   }, [fetchCatalogue])
 
-  // Remise à zéro de la page lors du changement de filtre
-  const handleQueryChange = (e) => {
-    setQuery(e.target.value)
-    setPage(0)
-  }
-
   const handleRarityChange = (rarityId) => {
     setSelectedRarity(rarityId)
     setPage(0)
   }
-
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
   return (
     <div className="flex h-full flex-col px-5 pb-12 pt-6 md:px-10">
@@ -78,7 +83,7 @@ export default function SearchPage() {
         <div className="flex items-end justify-between gap-4">
           <h1 className="title text-4xl text-ivory md:text-5xl">Catalogue complet</h1>
           <p className="text-sm text-mist">
-            <span className="font-display text-xl text-gold-300">{totalCount.toLocaleString()}</span> films
+            Exploration de la base de données
           </p>
         </div>
 
@@ -89,12 +94,12 @@ export default function SearchPage() {
               type="text"
               placeholder="Rechercher un film (ex: Les Dents de la mer, Inception...)"
               value={query}
-              onChange={handleQueryChange}
+              onChange={(e) => setQuery(e.target.value)}
               className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-ivory placeholder-mist outline-none focus:border-gold-500/50"
             />
             {query && (
               <button
-                onClick={() => { setQuery(''); setPage(0); }}
+                onClick={() => setQuery('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-mist hover:text-ivory"
               >
                 ✕
@@ -127,7 +132,7 @@ export default function SearchPage() {
           <div className="mx-auto mt-20 max-w-xs text-center">
             <p className="title text-2xl text-gold-300">Aucun résultat</p>
             <p className="mt-2 text-sm text-mist">
-              Aucun film ne correspond à ta recherche. Essayes avec d'autres termes.
+              Aucun film ne correspond à ta recherche. Essaie d'autres termes.
             </p>
           </div>
         ) : (
@@ -158,30 +163,28 @@ export default function SearchPage() {
         )}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <footer className="mt-6 flex items-center justify-between border-t border-white/10 pt-4 text-sm text-mist">
-          <button
-            disabled={page === 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="rounded px-3 py-1.5 border border-white/10 text-ivory disabled:opacity-30 disabled:cursor-not-allowed hover:border-gold-500"
-          >
-            Précédent
-          </button>
+      {/* Pagination légère */}
+      <footer className="mt-6 flex items-center justify-between border-t border-white/10 pt-4 text-sm text-mist">
+        <button
+          disabled={page === 0 || loading}
+          onClick={() => setPage((p) => Math.max(0, p - 1))}
+          className="rounded px-3 py-1.5 border border-white/10 text-ivory disabled:opacity-30 disabled:cursor-not-allowed hover:border-gold-500"
+        >
+          Précédent
+        </button>
 
-          <span>
-            Page <b className="text-gold-300">{page + 1}</b> sur {totalPages}
-          </span>
+        <span>
+          Page <b className="text-gold-300">{page + 1}</b>
+        </span>
 
-          <button
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded px-3 py-1.5 border border-white/10 text-ivory disabled:opacity-30 disabled:cursor-not-allowed hover:border-gold-500"
-          >
-            Suivant
-          </button>
-        </footer>
-      )}
+        <button
+          disabled={!hasMore || loading}
+          onClick={() => setPage((p) => p + 1)}
+          className="rounded px-3 py-1.5 border border-white/10 text-ivory disabled:opacity-30 disabled:cursor-not-allowed hover:border-gold-500"
+        >
+          Suivant
+        </button>
+      </footer>
     </div>
   )
 }
