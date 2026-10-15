@@ -2,15 +2,16 @@ import { db, requireUser } from './_lib/db.js'
 import { BOOSTER_SIZE } from './_lib/config.js'
 import { toCard } from './_lib/cards.js'
 
-const INDEX_TTL_MS = 10 * 60 * 1000 // l'index du catalogue est gardé 10 min par instance chaude
+const MIN_YEAR = Number(process.env.BOOSTER_MIN_YEAR) || 1950 // plus petite année tirable
+const COUNT_TTL_MS = 60 * 60 * 1000 //                         nb de films par année, gardé 1 h
 const MOVIE_COLUMNS = 'id, title, release_date, overview, poster, backdrop, popularity, vote_average, vote_count'
 
-// ───────── Utilitaires aléatoires (tout se passe ici, jamais en SQL) ─────────
+// ───────── Aléatoire (100 % Node) ─────────
 
 const randInt = (n) => Math.floor(Math.random() * n)
 
-// Fisher-Yates partiel : tire k éléments sans remise, sans modifier le tableau d'origine.
-// Avec k = arr.length c'est un mélange complet.
+// Fisher-Yates partiel : k éléments sans remise, sans modifier le tableau d'origine
+// (k = arr.length → mélange complet).
 function sample(arr, k) {
   const a = arr.slice()
   const n = Math.min(k, a.length)
@@ -21,91 +22,78 @@ function sample(arr, k) {
   return a.slice(0, n)
 }
 
-// ───────── Index du catalogue : Map<année, id[]> ─────────
-
-let indexCache = { at: 0, byYear: null, size: 0 }
-let indexLoading = null
-
-async function loadIndex() {
-  const { data, error } = await db.rpc('movie_index') // [["id", année|null], ...]
-  if (error) throw error
-  const byYear = new Map()
-  let size = 0
-  for (const [id, year] of data || []) {
-    const key = year ?? 'unknown'
-    let bucket = byYear.get(key)
-    if (!bucket) byYear.set(key, (bucket = []))
-    bucket.push(id)
-    size++
-  }
-  return { at: Date.now(), byYear, size }
-}
-
-async function getIndex() {
-  if (indexCache.byYear && Date.now() - indexCache.at < INDEX_TTL_MS) return indexCache
-  // un seul chargement à la fois, même si plusieurs requêtes arrivent ensemble
-  indexLoading ??= loadIndex()
-    .then((idx) => (indexCache = idx))
-    .finally(() => { indexLoading = null })
+// Marque l'étape en cause pour que les logs Vercel disent QUI timeout
+async function step(label, fn) {
   try {
-    return await indexLoading
+    return await fn()
   } catch (e) {
-    if (indexCache.byYear) return indexCache // index périmé > pas d'index
+    e.step = label
     throw e
   }
 }
 
-// ───────── Sélection : années toutes différentes si possible, 0 doublon d'id ─────────
+// ───────── Requêtes légères sur l'index (release_date, id) ─────────
 
-function pickIds(index, count, excluded = new Set()) {
-  const keys = [...index.byYear.keys()]
-  const used = new Set(excluded)
-  const chosen = []
+const yearRange = (q, y) => q.gte('release_date', `${y}-01-01`).lte('release_date', `${y}-12-31`)
 
-  const take = (bucket) => {
-    for (let t = 0; t < 8; t++) {
-      const id = bucket[randInt(bucket.length)]
-      if (!used.has(id)) { used.add(id); chosen.push(id); return true }
-    }
-    return false
-  }
+const countCache = new Map() // année -> { n, at }
 
-  // 1re passe : on mélange les ANNÉES (Fisher-Yates) et on prend un film au hasard par année.
-  // Une année rare a donc autant de chances d'apparaître qu'une année très fournie.
-  for (const y of sample(keys, keys.length)) {
-    if (chosen.length >= count) break
-    take(index.byYear.get(y))
-  }
-
-  // 2e passe : s'il existe moins d'années que de cartes, on complète sans doublon d'id.
-  let guard = 0
-  while (chosen.length < count && guard++ < count * 50 && index.size > used.size) {
-    take(index.byYear.get(keys[randInt(keys.length)]))
-  }
-  return chosen
+async function yearCount(y) {
+  const hit = countCache.get(y)
+  if (hit && Date.now() - hit.at < COUNT_TTL_MS) return hit.n
+  const { count, error } = await yearRange(db.from('movies').select('id', { count: 'exact', head: true }), y)
+  if (error) throw error
+  countCache.set(y, { n: count || 0, at: Date.now() })
+  return count || 0
 }
 
+// Un film au hasard dans l'année : offset aléatoire tiré ICI, lu dans l'ordre de l'index (aucun tri SQL).
+async function pickInYear(y) {
+  const n = await yearCount(y)
+  if (!n) return null
+  const off = randInt(n)
+  const { data, error } = await yearRange(db.from('movies').select('id'), y)
+    .order('release_date', { ascending: true })
+    .order('id', { ascending: true })
+    .range(off, off)
+  if (error) throw error
+  return data?.[0]?.id ?? null
+}
+
+// Années toutes différentes (années mélangées en Fisher-Yates), 0 doublon d'id.
+async function pickIds(count) {
+  const thisYear = new Date().getFullYear()
+  const allYears = Array.from({ length: thisYear - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i)
+  const ids = []
+  const usedYears = new Set()
+
+  // Tours 0-3 : une année neuve par carte. Une année vide est simplement abandonnée et remplacée.
+  // Tours 4-5 (quasi jamais) : si on manque encore de cartes, on autorise une année déjà vue, avec un id différent.
+  for (let round = 0; round < 6 && ids.length < count; round++) {
+    const pool = round < 4 ? allYears.filter((y) => !usedYears.has(y)) : allYears
+    const years = sample(pool, count - ids.length)
+    const found = await Promise.all(years.map((y) => step(`pickInYear:${y}`, () => pickInYear(y))))
+    years.forEach((y, i) => {
+      usedYears.add(y)
+      const id = found[i]
+      if (id && !ids.includes(id)) ids.push(id)
+    })
+  }
+  return ids
+}
+
+// SELECT ciblé : seulement les ids retenus
 async function fetchMovies(ids) {
-  const { data, error } = await db.from('movies').select(MOVIE_COLUMNS).in('id', ids) // SELECT ciblé
+  const { data, error } = await db.from('movies').select(MOVIE_COLUMNS).in('id', ids)
   if (error) throw error
   return data || []
 }
 
 async function drawMovies(count) {
-  const index = await getIndex()
-  const movies = []
-  const tried = new Set()
-
-  // jusqu'à 3 essais : couvre le cas d'un id présent dans l'index mais supprimé depuis
-  for (let attempt = 0; attempt < 3 && movies.length < count; attempt++) {
-    const ids = pickIds(index, count - movies.length, tried)
-    if (ids.length === 0) break
-    ids.forEach((id) => tried.add(id))
-    movies.push(...(await fetchMovies(ids)))
-    if (movies.length < count) indexCache.at = 0 // index obsolète : rechargé au prochain booster
-  }
-
-  // .in() renvoie dans l'ordre de la table (donc chronologique) : on remélange l'ordre de révélation
+  const ids = await step('pickIds', () => pickIds(count))
+  if (ids.length === 0) return []
+  const movies = await step('fetchMovies', () => fetchMovies(ids))
+  // .in() renvoie dans l'ordre de la table : on remélange l'ordre de révélation
   return sample(movies, movies.length)
 }
 
@@ -125,7 +113,7 @@ async function releaseClaim(userId, previous) {
     ? db.from('booster_claims').update({ last_opened_at: previous }).eq('user_id', userId)
     : db.from('booster_claims').delete().eq('user_id', userId)
   const { error } = await q
-  if (error) console.error('releaseClaim', error)
+  if (error) console.error('[booster] releaseClaim', error)
 }
 
 // ───────── Handler ─────────
@@ -146,14 +134,14 @@ export default async function handler(req, res) {
     if (claimError.message?.includes('cooldown')) {
       return res.status(429).json({ message: `Patiente ${cooldown} s entre deux boosters.` })
     }
-    console.error(claimError)
+    console.error('[booster] étape claim_booster', claimError)
     return res.status(500).json({ message: 'Impossible de tirer des cartes, réessaie.' })
   }
 
   try {
-    // 2) Node : tirage + 3) SELECT ciblé sur les ids retenus
+    // 2) Node : choix des années et des films, 3) SELECT ciblé sur les ids retenus
     const movies = await drawMovies(BOOSTER_SIZE)
-    if (movies.length === 0) throw new Error('Aucun film disponible.')
+    if (movies.length === 0) throw Object.assign(new Error('Aucun film disponible.'), { step: 'drawMovies' })
 
     // 4) Un seul INSERT pour toutes les cartes
     const rows = movies.map((movie) => ({
@@ -174,11 +162,11 @@ export default async function handler(req, res) {
     }))
 
     const { data: inserted, error: insertError } = await db.from('user_inventory').insert(rows).select()
-    if (insertError) throw insertError
+    if (insertError) throw Object.assign(insertError, { step: 'insert user_inventory' })
 
     return res.json({ cards: inserted.map(toCard) })
   } catch (e) {
-    console.error(e)
+    console.error(`[booster] étape ${e.step || '?'} :`, e)
     await releaseClaim(user.id, previous)
     return res.status(500).json({ message: 'Impossible de tirer des cartes, réessaie.' })
   }
