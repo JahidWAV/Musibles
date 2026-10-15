@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  AUCTION_DURATIONS, AUCTION_FEE, CARD_TYPES, CURRENCY, DEPARTMENTS, RARITIES, SCRAP_VALUES,
+  AUCTION_DURATIONS, CARD_TYPES, CURRENCY, DEPARTMENTS, RARITIES, SCRAP_VALUES,
   fmtNum, rarityOf, tmdbUrl, typeOf,
 } from '../constants'
 import Card, { fmt } from './Card'
@@ -95,7 +95,7 @@ function AuctionPanel({ card, onBack, onConfirm }) {
     <div className="mt-8 border border-[var(--hair)] p-5 text-left">
       <p className="title text-2xl text-ivory">Mettre aux enchères</p>
       <p className="mt-1 text-sm text-mist">
-        Un exemplaire est proposé. Commission de {Math.round(AUCTION_FEE * 100)} % sur le prix final ; sans offre, la carte te revient.
+        Un exemplaire est proposé et tu reçois le prix final en entier. Sans offre, la carte te revient.
       </p>
 
       <label htmlFor="start-price" className="mt-4 block text-[.65rem] uppercase tracking-[.2em] text-mist">Mise de départ ({CURRENCY})</label>
