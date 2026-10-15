@@ -12,6 +12,7 @@ import Layout from './components/Layout'
 // Chaque page est un morceau de code séparé : on ne télécharge que celle qu'on visite
 const BoosterPage = lazy(() => import('./pages/BoosterPage'))
 const AlbumPage = lazy(() => import('./pages/AlbumPage'))
+const SearchPage = lazy(() => import('./pages/SearchPage'))
 const AuctionsPage = lazy(() => import('./pages/AuctionsPage'))
 const AccountPage = lazy(() => import('./pages/AccountPage'))
 
