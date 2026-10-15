@@ -104,6 +104,7 @@ export default function App() {
             <Route index element={<Navigate to="/booster" replace />} />
             <Route path="booster" element={<BoosterPage />} />
             <Route path="album" element={<AlbumPage />} />
+            <Route path="catalogue" element={<SearchPage />} />
             <Route path="encheres" element={<AuctionsPage />} />
             <Route path="compte" element={<AccountPage />} />
             <Route path="*" element={<Navigate to="/booster" replace />} />
