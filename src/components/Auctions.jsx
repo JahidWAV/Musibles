@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AUCTION_FEE, CURRENCY, RARITIES, fmtNum, rarityOf } from '../constants'
+import { CURRENCY, RARITIES, fmtNum, rarityOf } from '../constants'
 import { cancelAuction, fetchAuctions, placeBid } from '../services/market'
 import Card from './Card'
 
@@ -224,7 +224,7 @@ function AuctionSheet({ auction: a, now, balance, onClose, onBid, onCancel }) {
               {a.mine ? (
                 <>
                   <p className="text-sm text-mist">
-                    C’est ta vente. Commission de {Math.round(AUCTION_FEE * 100)} % déduite du prix final.
+                    C’est ta vente : tu recevras le prix final en entier à la fin de l’enchère.
                   </p>
                   {a.bid_count === 0 && !over && (
                     <button disabled={busy} onClick={() => run(() => onCancel(a))} className="btn mt-4 w-full">Annuler la vente</button>
