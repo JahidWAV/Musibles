@@ -155,9 +155,10 @@ export default function SearchPage() {
             {movies.map((movie) => {
               const owned = collection[movie.id]
               
-              // Normalisation pour que le composant Card trouve bien le poster
+              // Normalisation pour passer directement l'URL complète du poster
               const formattedMovie = {
                 ...movie,
+                poster: movie.poster,
                 poster_path: movie.poster,
                 type: 'movie',
                 key: `movie_${movie.id}`
