@@ -21,34 +21,46 @@ export default function SearchPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
 
-  // 1. Effet de Debounce sur la recherche (attend 300ms après la frappe)
+  // Cache mémoire pour éviter de recharger la même page lors de la navigation
+  const cacheRef = useRef(new Map())
+
+  // Debounce sur la frappe au clavier (300ms)
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(query)
-      setPage(0) // Retour à la première page à chaque nouvelle recherche
+      setPage(0)
     }, 300)
     return () => clearTimeout(timer)
   }, [query])
 
-  // 2. Requête optimisée (sans le comptage exact lourd)
   const fetchCatalogue = useCallback(async () => {
-    setLoading(true)
+    const cacheKey = `${debouncedQuery.trim().toLowerCase()}_${selectedRarity}_${page}`
     
-    let dbQuery = supabase
-      .from('movies')
-      .select('id, title, release_date, poster, vote_average, popularity, rarity')
-
-    // Filtre texte (titre) sécurisé
-    if (debouncedQuery.trim()) {
-      dbQuery = dbQuery.ilike('title', `%${debouncedQuery.trim()}%`)
+    // Si la page est déjà en cache, affichage immédiat
+    if (cacheRef.current.has(cacheKey)) {
+      const cached = cacheRef.current.get(cacheKey)
+      setMovies(cached.movies)
+      setHasMore(cached.hasMore)
+      setLoading(false)
+      return
     }
 
-    // Filtre par rareté
+    setLoading(true)
+
+    // Selection exacte des champs necessaires, avec poster ET poster_path pour assurer le bon affichage
+    let dbQuery = supabase
+      .from('movies')
+      .select('id, title, release_date, poster, poster_path, vote_average, popularity, rarity')
+
+    const cleanQuery = debouncedQuery.trim()
+    if (cleanQuery) {
+      dbQuery = dbQuery.ilike('title', `%${cleanQuery}%`)
+    }
+
     if (selectedRarity !== 'all') {
       dbQuery = dbQuery.eq('rarity', selectedRarity)
     }
 
-    // Pagination propre (on charge PAGE_SIZE + 1 pour savoir s'il y a une page suivante sans faire de COUNT)
     const from = page * PAGE_SIZE
     const to = from + PAGE_SIZE
 
@@ -57,8 +69,14 @@ export default function SearchPage() {
       .range(from, to)
 
     if (!error && data) {
-      setHasMore(data.length > PAGE_SIZE)
-      setMovies(data.slice(0, PAGE_SIZE)) // On garde seulement les 24 demandés
+      const more = data.length > PAGE_SIZE
+      const list = data.slice(0, PAGE_SIZE)
+
+      // Stockage en cache
+      cacheRef.current.set(cacheKey, { movies: list, hasMore: more })
+
+      setMovies(list)
+      setHasMore(more)
     } else {
       setMovies([])
       setHasMore(false)
@@ -78,16 +96,14 @@ export default function SearchPage() {
 
   return (
     <div className="flex h-full flex-col px-5 pb-12 pt-6 md:px-10">
-      {/* En-tête de recherche */}
       <header className="mb-6 flex flex-col gap-4">
         <div className="flex items-end justify-between gap-4">
           <h1 className="title text-4xl text-ivory md:text-5xl">Catalogue complet</h1>
           <p className="text-sm text-mist">
-            Exploration de la base de données
+            Exploration du catalogue
           </p>
         </div>
 
-        {/* Barre de recherche + Filtres */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <input
@@ -107,7 +123,6 @@ export default function SearchPage() {
             )}
           </div>
 
-          {/* Sélecteur de rareté */}
           <select
             value={selectedRarity}
             onChange={(e) => handleRarityChange(e.target.value)}
@@ -122,37 +137,42 @@ export default function SearchPage() {
         </div>
       </header>
 
-      {/* Grille de cartes */}
       <div className="flex-1 overflow-y-auto">
-        {loading ? (
+        {loading && movies.length === 0 ? (
           <div className="flex h-64 items-center justify-center">
-            <p className="text-sm text-mist animate-pulse">Chargement du catalogue...</p>
+            <p className="text-sm text-mist animate-pulse">Chargement instantané...</p>
           </div>
         ) : movies.length === 0 ? (
           <div className="mx-auto mt-20 max-w-xs text-center">
             <p className="title text-2xl text-gold-300">Aucun résultat</p>
             <p className="mt-2 text-sm text-mist">
-              Aucun film ne correspond à ta recherche. Essaie d'autres termes.
+              Aucun film ne correspond à ta recherche.
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 xl:gap-5">
             {movies.map((movie) => {
               const owned = collection[movie.id]
+              
+              // Normalisation de la structure pour que le composant Card affiche le poster correctement
+              const formattedMovie = {
+                ...movie,
+                poster_path: movie.poster_path || movie.poster,
+                poster: movie.poster || movie.poster_path,
+                type: 'movie',
+                key: `movie_${movie.id}`
+              }
+
               return (
                 <div key={movie.id} className="relative group">
                   <Card
-                    card={{
-                      ...movie,
-                      type: 'movie',
-                      key: `movie_${movie.id}`
-                    }}
+                    card={formattedMovie}
                     locked={!owned}
                     count={owned?.count || 0}
-                    onClick={() => openCard(owned || { ...movie, type: 'movie', locked: true })}
+                    onClick={() => openCard(owned || { ...formattedMovie, locked: true })}
                   />
                   {owned && (
-                    <span className="absolute top-2 right-2 z-10 rounded bg-gold-500/90 px-1.5 py-0.5 text-[0.65rem] font-bold text-black shadow">
+                    <span className="absolute top-2 right-2 z-10 rounded bg-gold-500/90 px-1.5 py-0.5 text-[0.65rem] font-bold text-black shadow pointer-events-none">
                       Possédée
                     </span>
                   )}
@@ -163,7 +183,6 @@ export default function SearchPage() {
         )}
       </div>
 
-      {/* Pagination légère */}
       <footer className="mt-6 flex items-center justify-between border-t border-white/10 pt-4 text-sm text-mist">
         <button
           disabled={page === 0 || loading}
