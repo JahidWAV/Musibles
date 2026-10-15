@@ -166,7 +166,7 @@ export default function SearchPage() {
                 <div key={movie.id} className="relative group">
                   <Card
                     card={formattedMovie}
-                    locked={!owned}
+                    locked={false}
                     count={owned?.count || 0}
                     onClick={() => openCard(owned || { ...formattedMovie, locked: true })}
                   />
