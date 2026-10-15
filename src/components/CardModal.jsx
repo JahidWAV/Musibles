@@ -6,13 +6,6 @@ import {
 } from '../constants'
 import Card, { fmt } from './Card'
 
-const RARITY_TEXT = {
-  common: 'Une carte du catalogue, discrète mais précieuse.',
-  rare: 'Un titre qui compte, serti d’un reflet cyan.',
-  epic: 'Une référence du cinéma mondial, aux reflets violets.',
-  legendary: 'Un monument du grand écran : cadre doré holographique.',
-}
-
 const Stat = ({ label, value }) => (
   <div className="border border-[var(--hair)] px-4 py-3">
     <dt className="text-[.65rem] uppercase tracking-[.2em] text-mist">{label}</dt>
@@ -135,7 +128,6 @@ function Sheet({ card, onClose, onScrap, onAuction }) {
   const canAct = typeof onScrap === 'function'
 
   const rating = card.vote_average ?? card.rating
-  const votes = card.vote_count ?? card.votes
   const year = card.year || (card.release_date ? new Date(card.release_date).getFullYear() : '—')
 
   return (
@@ -164,7 +156,7 @@ function Sheet({ card, onClose, onScrap, onAuction }) {
 
         <div className="relative flex flex-col items-center gap-8 md:flex-row md:items-start md:gap-14">
           <div className="w-52 shrink-0 md:w-72">
-            <Card card={card} />
+            <Card card={card} bare />
             {owned > 1 && <p className="mt-3 text-center text-xs text-mist">{owned} exemplaires</p>}
           </div>
 
@@ -173,16 +165,20 @@ function Sheet({ card, onClose, onScrap, onAuction }) {
               {type.label} · {RARITIES[rarityKey].label}
             </p>
             <h2 className="title mt-2 text-4xl leading-[1.05] text-ivory md:text-5xl">{name}</h2>
-            <p className="mt-3 text-sm text-mist">{RARITY_TEXT[rarityKey]}</p>
+
+            {isMovie && (
+              <p className="mt-4 max-w-prose text-left text-sm leading-relaxed text-mist">
+                {card.overview || 'Aucun résumé disponible pour ce film.'}
+              </p>
+            )}
+
             <div className="hairline my-6" />
 
             <dl className="grid grid-cols-2 gap-3 text-left">
               {isMovie ? (
                 <>
                   <Stat label="Note" value={rating != null ? `${Number(rating).toFixed(1).replace('.', ',')} / 10` : '—'} />
-                  <Stat label="Votes" value={fmt(votes)} />
                   <Stat label="Sortie" value={year} />
-                  <Stat label="Popularité" value={fmt(Math.round(card.popularity || 0))} />
                 </>
               ) : (
                 <>
@@ -191,13 +187,6 @@ function Sheet({ card, onClose, onScrap, onAuction }) {
                 </>
               )}
             </dl>
-
-            {isMovie && card.overview && !panel && (
-              <p className="mt-6 max-w-prose text-left text-sm leading-relaxed text-mist">
-                {card.overview.slice(0, 260)}
-                {card.overview.length > 260 ? '…' : ''}
-              </p>
-            )}
 
             {panel === 'scrap' && <ScrapPanel card={card} max={owned} onBack={() => setPanel(null)} onConfirm={onScrap} />}
             {panel === 'auction' && <AuctionPanel card={card} onBack={() => setPanel(null)} onConfirm={onAuction} />}
